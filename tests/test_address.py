@@ -1,7 +1,7 @@
 """통화 중 주소 확인 도구. 11-20 시험 통화에서 본 실패를 그대로 시험한다."""
 from fastapi.testclient import TestClient
 
-from app import address, main
+from app import address, slots
 from app.main import app as api
 from tests.test_api import FIELDS, report
 
@@ -40,7 +40,7 @@ def test_last_checked_address_goes_on_the_request():
     rid = client.post("/vapi/webhook", json=body).json()["id"]
     req = client.get(f"/api/requests/{rid}").json()
     assert req["pickup"]["village"] == "서석면 청량리" and req["pickup"]["detail"] == "청량2리 30번지"
-    assert "call-1" not in main.ADDRESS  # 통화가 끝나면 지운다
+    assert "call-1" not in slots.STATE  # 통화가 끝나면 꺼내 쓴다
 
 
 def test_dashboard_test_button_sends_raw_args():

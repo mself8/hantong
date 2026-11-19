@@ -70,6 +70,11 @@
   .handoff { flex: none; width: 100%; margin-top: 8px; border-radius: 12px; padding: 12px 14px; font-size: 15px; line-height: 1.5;
     background: #e3f1ef; color: #0b5e57; font-weight: 700; }
   .handoff.wait { background: rgba(255,255,255,.1); color: var(--muted); font-weight: 400; }
+  /* 통화 중 서버에 저장한 확정값. 받아 적은 글자가 틀려도 이 값이 맞다 */
+  .confirmed { flex: none; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 8px; }
+  .confirmed .ct { font-size: 13px; color: var(--muted); margin-right: 2px; }
+  .confirmed .c { background: #e3f1ef; color: #0b5e57; border-radius: 10px; padding: 5px 10px; font-size: 14px; font-weight: 700; }
+  .confirmed .c b { font-weight: 400; margin-right: 6px; }
   .controls { flex: none; display: flex; align-items: flex-start; justify-content: center; gap: 28px; margin-top: 14px; }
   .slot { width: 64px; padding-top: 9px; }
   .tools { visibility: hidden; }
@@ -91,6 +96,8 @@
     body.live-mode .bubble .who { font-size: 17px; }
     body.live-mode .log-empty { font-size: 26px; }
     body.live-mode .handoff { font-size: 24px; padding: 16px 22px; }
+    body.live-mode .confirmed .ct { font-size: 18px; }
+    body.live-mode .confirmed .c { font-size: 22px; padding: 8px 14px; }
   }
 </style>
 </head>
@@ -122,6 +129,7 @@
       <div class="talk-status" id="status" aria-live="polite"></div>
     </div>
     <details class="card-mini" id="cardMini" open hidden><summary id="cardMiniTitle"></summary><div id="cardMiniBody"></div></details>
+    <div class="confirmed" id="confirmed" hidden aria-live="polite"></div>
     <div class="log" id="log"></div>
     <div class="handoff wait" id="handoff" hidden></div>
     <div class="controls">
@@ -147,7 +155,7 @@
   const $ = (id) => document.getElementById(id);
   const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  const log = $("log"), statusEl = $("status"), handoff = $("handoff"), avatar = $("avatar");
+  const log = $("log"), statusEl = $("status"), handoff = $("handoff"), avatar = $("avatar"), confirmed = $("confirmed");
   const cardId = new URLSearchParams(location.search).get("card");
 
   function showTalk() { document.body.classList.add("in-call"); $("dial").inert = true; $("talk").inert = false; }
@@ -158,6 +166,12 @@
     bubbles = [];
     log.innerHTML = `<p class="log-empty" id="logEmpty">${esc(emptyText)}</p>`;
     handoff.hidden = true;
+    renderConfirmed([]);
+  }
+  function renderConfirmed(rows) {  // 서버가 통화 중에 확인·저장한 값
+    confirmed.hidden = !(rows && rows.length);
+    confirmed.innerHTML = confirmed.hidden ? "" : `<span class="ct">확인된 것</span>` +
+      rows.map((r) => `<span class="c"><b>${esc(r.label)}</b>${esc(r.value)}</span>`).join("");
   }
   function sysLine(text) {
     $("logEmpty")?.remove();
@@ -249,6 +263,7 @@
       }
       if (s.id !== shown) { shown = s.id; resetLog("연결되면 대화가 여기에 글자로 나와요"); }
       renderTurns(s.turns);
+      renderConfirmed(s.slots);
       if (s.ended) renderHandoff(s); else handoff.hidden = true;
       const last = s.turns[s.turns.length - 1];
       avatar.classList.toggle("talking", !s.ended && !!last && last.role === "ai" && !!last.partial);

@@ -17,7 +17,7 @@ from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import address, bus, kakao, live, pipeline, store, view, workflow
+from . import address, bus, kakao, live, pipeline, slots, store, view, workflow
 from .data import hospitals, villages, voice_cards
 
 mimetypes.add_type("font/woff2", ".woff2")  # 글꼴 파일을 글꼴 형식으로 내보낸다
@@ -56,7 +56,7 @@ def _bus_guide(args: dict) -> str:
 
 def _find_date(args: dict) -> str:
     """'다음 주 화요일' 같은 말을 서버 규칙으로 날짜로 바꾼다(AI가 직접 세면 틀린다)."""
-    from .data import WEEKDAYS, holidays
+    from .data import WEEKDAYS
     from .normalize import resolve_date
     said = str(args.get("expr") or "")
     today = pipeline.now_kst().date()
@@ -64,32 +64,21 @@ def _find_date(args: dict) -> str:
     if not d:
         return f"'{said}'은(는) 날짜 하나로 정하지 못했어요. 며칠인지 여쭤 주세요."
     wd, days = WEEKDAYS[d.weekday()], (d - today).days
-    notes = []
-    if days < 0:
-        notes.append("이미 지난 날이에요")
-    if d.isoformat() in holidays():
-        notes.append(f"공휴일({holidays()[d.isoformat()]})이라 쉬는 병원이 많아요")
-    elif wd in ("토", "일"):
-        notes.append(f"{wd}요일이라 쉬는 병원이 많아요")
-    if 0 <= days < 7:
-        notes.append("같이 가 드릴 분은 일주일 전에 예약해야 해서, 동행이 필요하면 그날은 어려울 수 있어요")
+    notes = slots.date_notes(d, today)
     when = "오늘" if days == 0 else "내일" if days == 1 else f"오늘부터 {days}일 뒤"
     return f"{d.month}월 {d.day}일 {wd}요일({when})." + (" " + ". ".join(notes) + "." if notes else "")
 
 
-# 통화마다 마지막으로 확인한 주소. 통화가 끝나면 신청서 주소로 쓴다(대화를 다시 읽은 값보다 정확하다).
-ADDRESS: dict[str, dict] = {}
-
-
 def _check_address(args: dict, call_id: str | None = None) -> str:
-    """어르신이 말한 주소를 마을 목록과 맞춰 본다(없는 리·다른 면의 리·마을 번호)."""
+    """어르신이 말한 주소를 마을 목록과 맞춰 본다(없는 리·다른 면의 리·마을 번호). 맞으면 이 통화의 확정 주소로 적는다."""
     r = address.check(str(args.get("said") or args.get("address") or ""))
-    if r["status"] == "ok" and call_id:
-        ADDRESS[call_id] = {"village": r["village"], "detail": r["detail"]}
+    if r["status"] == "ok":
+        slots.put_address(call_id, r)
     return r["message"]
 
 
-TOOLS = {"bus_guide": lambda a, c: _bus_guide(a), "find_date": lambda a, c: _find_date(a), "check_address": _check_address}
+TOOLS = {"bus_guide": lambda a, c: _bus_guide(a), "find_date": lambda a, c: _find_date(a),
+         "check_address": _check_address, "save_info": lambda a, c: slots.save(c, a)}
 
 
 @app.post("/vapi/tools")
@@ -97,7 +86,13 @@ async def vapi_tools(request: Request) -> dict:
     """통화 중에 AI가 부르는 도구(버스 안내, 날짜 찾기, 주소 확인). Vapi는 늘 200과 results를 기다린다."""
     body = await request.json()
     if "message" not in body:  # 대시보드 시험 버튼은 받을 값만 그대로 보낸다
-        return {"result": _find_date(body) if "expr" in body else _check_address(body) if "said" in body else _bus_guide(body)}
+        if "expr" in body:
+            return {"result": _find_date(body)}
+        if "said" in body:
+            return {"result": _check_address(body)}
+        if any(k in body for k in slots.LABEL):
+            return {"result": slots.save(None, body)}
+        return {"result": _bus_guide(body)}
     results = []
     call_id = ((body.get("message") or {}).get("call") or {}).get("id")
     for call in (body.get("message") or {}).get("toolCallList") or []:
@@ -133,9 +128,9 @@ async def vapi_webhook(request: Request, bg: BackgroundTasks,
         live.finish(msg, None, turns)
         return {"ok": True, "skipped": "어르신 말이 없는 통화"}
     prefill = pipeline.vapi_structured(msg)
-    checked = ADDRESS.pop((msg.get("call") or {}).get("id"), None)
-    if checked and prefill:  # 통화 중 서버가 확인한 마지막 주소를 쓴다(AI가 '청량2리'를 '청량1리'로 베낀 일이 있었다)
-        prefill.update(village=checked["village"], address_detail=checked["detail"])
+    confirmed = slots.take((msg.get("call") or {}).get("id"))
+    if confirmed and prefill:  # 통화 중 서버에 저장한 확정값이 대화 기록(두 번 받아 적어 틀릴 수 있다)을 다시 읽은 값보다 정확하다
+        prefill.update(slots.as_prefill(confirmed))
     # 첫 통화 점검용: 내용은 남기지 않고 어떤 칸이 왔는지만 남긴다
     log.info("vapi report: artifact=%s structured=%s", sorted((msg.get("artifact") or {}).keys()), bool(prefill))
     req = pipeline.new_request(turns, source="phone", call=call, caller=caller, prefill=prefill)
@@ -151,6 +146,7 @@ def _live_view(s: dict | None) -> dict:
         req = store.get(s["request_id"])
         if req and req.get("status") != "processing":
             s["summary"] = req.get("summary")
+    s["slots"] = slots.peek(s["id"])  # 통화 중 확정한 값(받아 적은 글이 틀려도 이 값이 맞다)
     return s
 
 
