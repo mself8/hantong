@@ -51,7 +51,11 @@ def health() -> dict:
 async def vapi_tools(request: Request) -> dict:
     """통화 중에 AI가 부르는 도구. 지금은 버스 안내(bus_guide) 하나다. Vapi는 늘 200과 results를 기다린다."""
     from .normalize import match_village
-    msg = (await request.json()).get("message") or {}
+    body = await request.json()
+    if "message" not in body and "village" in body:  # 대시보드 시험 버튼은 받을 값만 그대로 보낸다
+        v = match_village(str(body["village"]))
+        return {"result": bus.guide_text(v) if v else "홍천군 리 목록에서 찾지 못했어요."}
+    msg = body.get("message") or {}
     results = []
     for call in msg.get("toolCallList") or []:
         fn = call.get("function") or {}

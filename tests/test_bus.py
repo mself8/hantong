@@ -53,3 +53,8 @@ def test_hope_taxi_goes_to_the_township_office_and_message_names_a_pharmacy():
     taxi = next(a for a in req["applications"] if a["type"] == "hope_taxi")
     assert taxi["contact"] == "033-430-4454" and taxi["agency"].startswith("서석면")   # 면사무소 담당 전화
     assert "약국" in confirmation_text(req)                                           # 서울의원 가까운 약국
+
+
+def test_dashboard_test_button_body_also_works():
+    r = client.post("/vapi/tools", json={"village": "서석면 수하리"}).json()
+    assert "수하" in r["result"]
