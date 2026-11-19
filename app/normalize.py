@@ -325,4 +325,32 @@ def match_village(text: str | None) -> Village | None:
     # 3) 소리 나는 대로 적은 경우('결운리'를 '겨룬리'로). 글자로 못 찾았을 때만.
     st = sounds(t)
     heard = [v for v in vs if len(v.name.removesuffix("리")) >= 2 and sounds(v.name.removesuffix("리")) in st]
-    return max(heard, key=lambda v: len(v.name)) if heard else None
+    if heard:
+        return max(heard, key=lambda v: len(v.name))
+    # 4) 받아 적기가 자모 하나 틀린 경우('결운리'를 '겨룻리'로). 가장 가까운 리가 하나뿐일 때만.
+    for w in re.findall(r"[가-힣]{2,4}리", t):
+        dist = [(v, _edit(_jamo(sounds(w)), _jamo(sounds(v.name)))) for v in vs if abs(len(v.name) - len(w)) <= 1]
+        best = min(d for _, d in dist)
+        close = [v for v, d in dist if d == best and d <= 1]
+        close = [v for v in close if v.town in s] or close
+        if len(close) == 1:
+            return close[0]
+    return None
+
+
+def _jamo(s: str) -> list[int]:
+    """글자를 첫소리·가운뎃소리·받침으로 쪼갠다(받침 없음도 한 칸)."""
+    out = []
+    for ch in s:
+        c = ord(ch) - 0xAC00
+        out += [c // 588, 19 + (c % 588) // 28, 40 + c % 28] if 0 <= c < 11172 else [100 + ord(ch)]
+    return out
+
+
+def _edit(a: list[int], b: list[int]) -> int:
+    row = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (x != y))
+    return row[-1]

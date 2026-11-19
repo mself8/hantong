@@ -99,3 +99,17 @@ def test_call_fills_dashboard_agency_request_and_forms(calls):
     assert want in "\n".join(c.text for row in word.tables[0].rows for c in row.cells)
     pdf = fitz.open(stream=client.get(f"/api/requests/{rid}/forms/integrated.pdf").content, filetype="pdf")
     assert want in pdf[0].get_text().replace("\xa0", " ")  # 채운 글자의 빈칸은 \xa0로 읽힌다
+
+
+def test_lot_number_finds_the_house_by_address_search(calls, monkeypatch):
+    """번지까지 들으면 카카오 주소 검색으로 집 주소(도로명)를 찾는다."""
+    house = {"address_name": "강원특별자치도 홍천군 서석면 수하리 123", "x": "128.16", "y": "37.76",
+             "address": {"address_name": "강원특별자치도 홍천군 서석면 수하리 123"},
+             "road_address": {"address_name": "강원특별자치도 홍천군 서석면 행치령로 700"}}
+    sent = []
+    monkeypatch.setattr(kakao, "_search", lambda params, url=kakao.URL: sent.append((url, params)) or [house])
+    found = kakao.find_pickup("수하리 123번지 파란 지붕 집", SUHA)
+    assert sent[0][0] == kakao.ADDRESS_URL and sent[0][1]["query"] == "강원 홍천군 서석면 수하리 123"
+    assert found["address"] == "강원특별자치도 홍천군 서석면 행치령로 700" and found["name"] == "수하리 123"
+    assert found["url"].startswith("https://map.kakao.com/link/map/")
+    assert kakao._LOT.search("수하2리 마을회관") is None and kakao._LOT.search("2층 집") is None

@@ -58,3 +58,44 @@ def test_hope_taxi_goes_to_the_township_office_and_message_names_a_pharmacy():
 def test_dashboard_test_button_body_also_works():
     r = client.post("/vapi/tools", json={"village": "서석면 수하리"}).json()
     assert "수하" in r["result"]
+
+
+def test_find_date_tool_counts_days_on_the_server():
+    from app import pipeline
+    from datetime import datetime
+    import app.main as main
+    body = {"message": {"type": "tool-calls", "toolCallList": [
+        {"id": "d1", "type": "function", "function": {"name": "find_date", "arguments": {"expr": "다음 주 화요일"}}},
+        {"id": "d2", "type": "function", "function": {"name": "find_date", "arguments": {"expr": "내일"}}},
+        {"id": "d3", "type": "function", "function": {"name": "find_date", "arguments": {"expr": "아무 때나"}}},
+    ]}}
+    real = pipeline.now_kst
+    pipeline.now_kst = lambda: datetime(2026, 11, 20, 3, 0, tzinfo=real().tzinfo)   # 11월 20일 금요일
+    try:
+        r = client.post("/vapi/tools", json=body).json()["results"]
+    finally:
+        pipeline.now_kst = real
+    assert r[0]["result"].startswith("11월 24일 화요일(오늘부터 4일 뒤)")
+    assert "토요일이라 쉬는 병원이 많아요" in r[1]["result"] and "일주일 전에 예약" in r[1]["result"]
+    assert "정하지 못했어요" in r[2]["result"]
+
+
+def test_saved_transcript_uses_the_ai_text_not_the_echo():
+    from app.pipeline import parse_vapi_report
+    msg = {"artifact": {"messages": [{"role": "bot", "message": "안녕하세요. 한 통에. 면 대유 AI. 상담원입니다."},
+                                     {"role": "user", "message": "허리가 아파."}],
+                        "messagesOpenAIFormatted": [{"role": "system", "content": "지시문"},
+                                                    {"role": "assistant", "content": "안녕하세요, 한 통이면 돼유우~ AI 상담원입니다."},
+                                                    {"role": "user", "content": "허리가 아파."},
+                                                    {"role": "assistant", "tool_calls": [{"id": "x"}]},
+                                                    {"role": "tool", "content": "버스 안내"}]}}
+    turns = parse_vapi_report(msg)[0]
+    assert turns == [{"role": "ai", "text": "안녕하세요, '한 통이면 돼유' AI 상담원입니다."}, {"role": "elder", "text": "허리가 아파."}]
+
+
+def test_outside_resident_is_not_filled_from_the_roster():
+    rid = client.post("/vapi/webhook", json=report(dict(FIELDS, village="춘천 효자동"))).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert req["pickup"]["village"] is None
+    assert any(c["type"] == "lives_outside" for c in req["checks"])
+    assert not any(c["type"] == "village_from_roster" for c in req["checks"])

@@ -79,7 +79,10 @@ def elder_name(req: dict) -> str | None:
 def pickup_address(pickup: dict) -> str | None:
     """카카오맵에서 찾은 모시러 갈 곳의 실제 주소. 예: '강원특별자치도 홍천군 서석면 ○○길 12 (수하리마을회관) 앞'"""
     m = pickup.get("map")
-    return f"{m['address']} ({m['name']}){m['tail']}" if m else None
+    if not m:
+        return None
+    name = f" ({m['name']})" if m.get("name") else ""  # 번지로 찾은 지번 주소는 이름 없이 주소만
+    return f"{m['address']}{name}{m['tail']}"
 
 
 def said_address(pickup: dict) -> str | None:

@@ -19,7 +19,7 @@ _LOCK = threading.Lock()
 _CALLS: dict[str, dict] = {}
 KEEP_SECONDS = 2 * 3600  # 두 시간 지난 통화는 지운다
 _NOT_CHAR = re.compile(r"[^0-9A-Za-z가-힣]")
-_BRAND = re.compile(r"'?한[\s.,]*통[\s.,]*[이의][\s.,]*면[\s.,]*[대돼되][\s.,]*유우*~*'?")  # '한통이. 면 대유'처럼 끊겨도, 첫인사의 '돼유우~'도
+_BRAND = re.compile(r"'?한[\s.,]*통[\s.,]*[이의에][\s.,]*면[\s.,]*[대돼되][\s.,]*유우*~*'?")  # '한통이. 면 대유'처럼 끊겨도, 첫인사의 '돼유우~'도
 
 
 def fix_name(text: str) -> str:

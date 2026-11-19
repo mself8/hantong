@@ -47,17 +47,47 @@ def health() -> dict:
 
 # ── Vapi ──────────────────────────────────────────────
 
+def _bus_guide(args: dict) -> str:
+    from .normalize import match_village
+    said = str(args.get("village") or "")
+    v = match_village(said)
+    return bus.guide_text(v) if v else f"'{said}'은(는) 홍천군 리 목록에서 찾지 못했어요. 무슨 면 무슨 리인지 다시 여쭤 주세요."
+
+
+def _find_date(args: dict) -> str:
+    """'다음 주 화요일' 같은 말을 서버 규칙으로 날짜로 바꾼다(AI가 직접 세면 틀린다)."""
+    from .data import WEEKDAYS, holidays
+    from .normalize import resolve_date
+    said = str(args.get("expr") or "")
+    today = pipeline.now_kst().date()
+    d = resolve_date(said, today)
+    if not d:
+        return f"'{said}'은(는) 날짜 하나로 정하지 못했어요. 며칠인지 여쭤 주세요."
+    wd, days = WEEKDAYS[d.weekday()], (d - today).days
+    notes = []
+    if days < 0:
+        notes.append("이미 지난 날이에요")
+    if d.isoformat() in holidays():
+        notes.append(f"공휴일({holidays()[d.isoformat()]})이라 쉬는 병원이 많아요")
+    elif wd in ("토", "일"):
+        notes.append(f"{wd}요일이라 쉬는 병원이 많아요")
+    if 0 <= days < 7:
+        notes.append("같이 가 드릴 분은 일주일 전에 예약해야 해서, 동행이 필요하면 그날은 어려울 수 있어요")
+    when = "오늘" if days == 0 else "내일" if days == 1 else f"오늘부터 {days}일 뒤"
+    return f"{d.month}월 {d.day}일 {wd}요일({when})." + (" " + ". ".join(notes) + "." if notes else "")
+
+
+TOOLS = {"bus_guide": _bus_guide, "find_date": _find_date}
+
+
 @app.post("/vapi/tools")
 async def vapi_tools(request: Request) -> dict:
-    """통화 중에 AI가 부르는 도구. 지금은 버스 안내(bus_guide) 하나다. Vapi는 늘 200과 results를 기다린다."""
-    from .normalize import match_village
+    """통화 중에 AI가 부르는 도구(버스 안내, 날짜 찾기). Vapi는 늘 200과 results를 기다린다."""
     body = await request.json()
-    if "message" not in body and "village" in body:  # 대시보드 시험 버튼은 받을 값만 그대로 보낸다
-        v = match_village(str(body["village"]))
-        return {"result": bus.guide_text(v) if v else "홍천군 리 목록에서 찾지 못했어요."}
-    msg = body.get("message") or {}
+    if "message" not in body:  # 대시보드 시험 버튼은 받을 값만 그대로 보낸다
+        return {"result": _find_date(body) if "expr" in body else _bus_guide(body)}
     results = []
-    for call in msg.get("toolCallList") or []:
+    for call in (body.get("message") or {}).get("toolCallList") or []:
         fn = call.get("function") or {}
         args = fn.get("arguments") or {}
         if isinstance(args, str):
@@ -65,13 +95,9 @@ async def vapi_tools(request: Request) -> dict:
                 args = json.loads(args)
             except ValueError:
                 args = {}
-        if fn.get("name") != "bus_guide":
-            results.append({"toolCallId": call.get("id"), "error": f"모르는 도구: {fn.get('name')}"})
-            continue
-        said = str(args.get("village") or "")
-        v = match_village(said)
-        results.append({"toolCallId": call.get("id"), "result": bus.guide_text(v) if v else
-                        f"'{said}'은(는) 홍천군 리 목록에서 찾지 못했어요. 무슨 면 무슨 리인지 다시 여쭤 주세요."})
+        tool = TOOLS.get(fn.get("name"))
+        results.append({"toolCallId": call.get("id"), "result": tool(args)} if tool else
+                       {"toolCallId": call.get("id"), "error": f"모르는 도구: {fn.get('name')}"})
     return {"results": results}
 
 

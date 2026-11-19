@@ -127,6 +127,9 @@ def unusual_surname(name: str | None) -> bool:
     return bool(name) and name[:2] not in SURNAMES_2 and name[0] not in SURNAMES
 
 
+OUTSIDE_PLACES = ("춘천", "원주", "강릉", "횡성", "인제", "양구", "평창", "가평", "양평", "서울", "인천", "경기", "부산", "대구", "대전", "광주")
+
+
 def _town_in(text: str | None) -> str | None:
     """'홍천읍', '서석면 쪽' 같은 말에서 홍천군 읍·면 이름을 찾는다."""
     return next((t for t in sorted({v.town for v in villages()}, key=len, reverse=True) if text and t in text), None)
@@ -140,7 +143,9 @@ def fill(req: dict, ex, today: date) -> dict:
     # '홍천읍'처럼 읍·면까지만 말했고 등록된 주소와 읍·면이 다르면, 등록된 주소로 채우지 않고 말한 읍·면을 쓴다
     spoken_town = None if spoken_village else _town_in(ex.village)
     other_town = bool(spoken_town and roster_village and roster_village.town != spoken_town)
-    village = spoken_village or (None if other_town else roster_village)
+    outside = None if spoken_village or spoken_town else next(
+        (w for w in OUTSIDE_PLACES if ex.village and w in ex.village), None)  # '춘천 효자동'처럼 홍천군 밖
+    village = spoken_village or (None if other_town or outside else roster_village)
     same_as_roster = bool(roster_village and village and roster_village.code == village.code)
     home_town = village.town if village else spoken_town
     # 병원 이름 없이 아픈 곳만 말한 경우("배가 아파요")에도 진료과를 잡는다
@@ -158,6 +163,9 @@ def fill(req: dict, ex, today: date) -> dict:
         extra.append({"type": "village_town_only", "level": "warn",
                       "message": f"통화에서 '{spoken_town}'까지만 들었어요. 무슨 리인지 확인이 필요해요."
                                  + (f" (등록된 주소: {roster_village.label})" if roster_village else "")})
+    elif outside:
+        extra.append({"type": "lives_outside", "level": "warn",
+                      "message": f"통화에서 홍천군 밖({ex.village})에 산다고 했어요. 상담원이 사시는 시·군청이나 주민센터를 안내했어요."})
     elif roster_village and not spoken_village:  # 통화에서 마을을 못 들었는데 등록된 주소로 채운 경우
         heard = (f"통화에서 '{spoken_town}'까지만 들어서 리는" if spoken_town
                  else f"말씀하신 '{ex.village}'를 홍천 리 목록에서 찾지 못해" if ex.village else "통화에서 마을을 확인하지 못해")
@@ -273,7 +281,11 @@ def parse_vapi_report(msg: dict) -> tuple[list[dict], dict, str | None]:
     """Vapi end-of-call-report에서 통화 기록, 통화 정보, 건 사람 번호를 꺼낸다."""
     artifact = msg.get("artifact") or {}
     turns = []
-    for m in artifact.get("messages") or msg.get("messages") or []:
+    for m in artifact.get("messagesOpenAIFormatted") or []:  # AI가 실제로 쓴 글(목소리를 다시 받아 적은 글은 '한 통에. 면 대유'처럼 틀린다)
+        if m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str) and m["content"].strip():
+            turns.append({"role": "elder" if m["role"] == "user" else "ai",
+                          "text": m["content"].strip() if m["role"] == "user" else fix_name(m["content"].strip())})
+    for m in [] if turns else artifact.get("messages") or msg.get("messages") or []:
         text = (m.get("message") or m.get("content") or "").strip()
         if not text:
             continue
