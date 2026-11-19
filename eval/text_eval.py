@@ -182,9 +182,10 @@ def main():
     ap.add_argument("--llm-url", default="http://127.0.0.1:8001/v1")
     ap.add_argument("--model", default="qwen3.8-27b")
     ap.add_argument("--concurrency", type=int, default=6)
+    ap.add_argument("--split", default="02_평가", help="02_평가(E 60장) 또는 01_개발(D 10장)")
     args = ap.parse_args()
 
-    dialogs, gold, cards = load(args.data)
+    dialogs, gold, cards = load(args.data, args.split)
     os.makedirs(args.out, exist_ok=True)
     llm = asyncio.run(run_llm_all(dialogs, args.llm_url, args.model, args.concurrency)) if args.mode == "llm" else {}
 
@@ -220,7 +221,7 @@ def main():
     summary.update({"모드": args.mode, "모델": args.model if args.mode == "llm" else None,
                     "실패_대화수": len(fails),
                     "LLM_오류수": sum(1 for r in rows if r.get("오류"))})
-    stem = f"{args.mode}"
+    stem = f"{args.mode}" + ("_개발" if args.split.startswith("01") else "")
     with open(os.path.join(args.out, f"{stem}_대화별.csv"), "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()) + [k for k in ("초", "오류", "추출") if k not in rows[0]])
         w.writeheader()
