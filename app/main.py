@@ -17,7 +17,7 @@ from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import kakao, live, pipeline, store, view, workflow
+from . import bus, kakao, live, pipeline, store, view, workflow
 from .data import hospitals, villages, voice_cards
 
 mimetypes.add_type("font/woff2", ".woff2")  # 글꼴 파일을 글꼴 형식으로 내보낸다
@@ -46,6 +46,30 @@ def health() -> dict:
 
 
 # ── Vapi ──────────────────────────────────────────────
+
+@app.post("/vapi/tools")
+async def vapi_tools(request: Request) -> dict:
+    """통화 중에 AI가 부르는 도구. 지금은 버스 안내(bus_guide) 하나다. Vapi는 늘 200과 results를 기다린다."""
+    from .normalize import match_village
+    msg = (await request.json()).get("message") or {}
+    results = []
+    for call in msg.get("toolCallList") or []:
+        fn = call.get("function") or {}
+        args = fn.get("arguments") or {}
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except ValueError:
+                args = {}
+        if fn.get("name") != "bus_guide":
+            results.append({"toolCallId": call.get("id"), "error": f"모르는 도구: {fn.get('name')}"})
+            continue
+        said = str(args.get("village") or "")
+        v = match_village(said)
+        results.append({"toolCallId": call.get("id"), "result": bus.guide_text(v) if v else
+                        f"'{said}'은(는) 홍천군 리 목록에서 찾지 못했어요. 무슨 면 무슨 리인지 다시 여쭤 주세요."})
+    return {"results": results}
+
 
 @app.post("/vapi/webhook")
 async def vapi_webhook(request: Request, bg: BackgroundTasks,

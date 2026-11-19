@@ -10,7 +10,8 @@ import re
 from datetime import date
 from functools import lru_cache
 
-from .data import DATA, WEEKDAYS
+from .bus import meters, nearest_stops
+from .data import DATA, WEEKDAYS, hospital_by_id, villages
 
 AGENCIES = {
     "companion": {"label": "병원동행 예약", "agency": "홍천군노인복지관", "contact": "033-430-8753"},
@@ -37,6 +38,13 @@ def hope_taxi_villages() -> list[dict]:
     for r in rows:
         r["법정리"] = re.sub(r"\d+리$", "리", r["리"])
     return rows
+
+
+@lru_cache
+def _taxi_offices() -> dict[str, dict]:
+    """면사무소 희망택시 담당(홍천군청 직원 담당업무 검색). 목록에 없는 읍·면은 '그 외 읍·면' 줄(군청 도시교통과)."""
+    with open(DATA / "public/희망택시_면사무소_담당.csv", encoding="utf-8-sig", newline="") as f:
+        return {r["읍면"]: r for r in csv.DictReader(f)}
 
 
 def _hope_taxi_match(village_label: str | None) -> dict | None:
@@ -88,12 +96,23 @@ def form_address(pickup: dict) -> str:
     return base + (f" ({pickup['detail']})" if pickup.get("detail") else "")
 
 
+def _stop(p: dict) -> str | None:
+    """사는 리에서 가까운 버스 정류장 이름(국토교통부 정류장 위치정보)."""
+    v = next((v for v in villages() if v.code == p.get("village_code")), None)
+    near = nearest_stops(v, 1) if v else []
+    return near[0][0] if near else None
+
+
 def _transport(req: dict, why_place: str | None) -> dict:
     """교통수단: 통화에서 받은 휠체어 여부와 사는 마을로 정한다(어르신께 따로 묻지 않는다)."""
     p, res = req.get("pickup") or {}, req.get("resident") or {}
     if req.get("wheelchair_needed") == "yes":
         reg = {True: "등록됨", False: "미등록이라 등록 필요"}.get(res.get("special_transport"), "등록 여부 확인")
         return {"value": "특별교통수단", "sub": f"휠체어 차량 · {reg}", "level": "ok"}
+    cands = (req.get("hospital") or {}).get("candidates") or []
+    if cands and cands[0].get("far"):  # 희망택시는 면 소재지까지만 가고, 시외버스 시간표는 자료에 없다
+        return {"value": "교통편 확인 필요", "sub": "홍천 밖 병원 · 홍천터미널까지는 농어촌버스", "level": "check",
+                "why": "홍천 밖 병원이라 희망택시는 못 타요"}
     card = {True: "교통복지카드 있음(월 20회 무료)", False: "교통복지카드 없음"}.get(res.get("bus_card"), "교통복지카드 확인")
     bus = req.get("bus_ok") or "unknown"
     taxi = _hope_taxi_match(p.get("village"))
@@ -107,7 +126,9 @@ def _transport(req: dict, why_place: str | None) -> dict:
     if not p.get("village"):
         return {"value": "농어촌버스", "sub": card, "level": "check", "why": "사는 곳을 몰라 교통수단을 정하지 못했어요"}
     why = why_place or (None if bus == "yes" else "버스를 타실 수 있는지 듣지 못했어요")
-    return {"value": "농어촌버스", "sub": card + (" · 희망택시도 다니는 마을" if taxi else ""), "level": "check" if why else "ok", "why": why}
+    stop = _stop(p)
+    return {"value": "농어촌버스", "sub": card + (" · 희망택시도 다니는 마을" if taxi else "") + (f" · {stop} 정류장" if stop else ""),
+            "level": "check" if why else "ok", "why": why}
 
 
 def facts(req: dict) -> dict:
@@ -253,6 +274,9 @@ def build_applications(req: dict) -> list[dict]:
             "왕복 여부": "왕복",
             "요금": PRICE["hope_taxi"],
         }, notes))
+        office = _taxi_offices().get(town) or _taxi_offices()["그 외 읍·면"]
+        apps[-1].update(agency=f"{town}사무소 희망택시 담당" if town in _taxi_offices() else office["담당"],
+                        contact=office["전화"])
 
     if req.get("wheelchair_needed") == "yes":
         apps.append(_app("special_transport", len(apps) + 1, {
@@ -306,6 +330,25 @@ def _topic(word: str) -> str:
     return word + ("은" if has_final else "는")
 
 
+@lru_cache
+def _pharmacies() -> list[dict]:
+    with open(DATA / "public/홍천군_약국.csv", encoding="utf-8-sig", newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def _pharmacy_near(req: dict) -> dict | None:
+    """정해진 병원에서 500m 안 가장 가까운 약국(건강보험심사평가원 약국 현황)."""
+    h = req.get("hospital") or {}
+    cands = h.get("candidates") or []
+    if not cands or not (h.get("status") == "matched" or h.get("basis") == "officer"):
+        return None
+    hosp = hospital_by_id().get(cands[0]["id"])
+    if not hosp or hosp.lat is None or hosp.lon is None:
+        return None
+    best = min(_pharmacies(), key=lambda r: meters(hosp.lat, hosp.lon, float(r["위도"]), float(r["경도"])))
+    return best if meters(hosp.lat, hosp.lon, float(best["위도"]), float(best["경도"])) <= 500 else None
+
+
 def confirmation_text(req: dict) -> str:
     """기관 응답으로 어르신께 보낼 확정 안내문을 만든다. 표준어 존댓말, 짧게."""
     name = elder_name(req)
@@ -321,5 +364,8 @@ def confirmation_text(req: dict) -> str:
             lines.append(f"{_topic(SHORT[a['type']])} 이번에는 어렵습니다. 담당자가 다시 연락드리겠습니다.")
     if not req.get("applications"):
         lines.append("말씀하신 내용 잘 받았습니다.")
+    pharmacy = _pharmacy_near(req)
+    if pharmacy:
+        lines.append(f"약은 병원 가까운 {pharmacy['요양기관명']}({pharmacy['전화번호']})에서 받으실 수 있어요.")
     lines.append("전날 다시 연락드리겠습니다.")
     return "\n".join(lines)
