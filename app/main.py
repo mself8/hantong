@@ -1,6 +1,7 @@
 """한 통이면 돼유 서버: Vapi 통화 기록을 받아 신청서를 만들고, 대시보드에 API를 준다."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -171,6 +172,21 @@ def list_hospitals(q: str | None = None) -> list[dict]:
 @app.get("/api/villages")
 def list_villages() -> list[dict]:
     return [v.to_dict() for v in villages()]
+
+
+# ── 시연용 웹 통화 페이지 (발표장 QR 코드) ──────────────
+
+CALL_PAGE = Path(__file__).resolve().parent / "static" / "call.html"
+DEFAULT_ASSISTANT = "e441e44c-5204-458d-a2d2-f8676774de27"
+
+
+@app.get("/call", response_class=HTMLResponse)
+def call_page() -> str:
+    """휴대폰 브라우저에서 AI 상담원과 바로 통화하는 페이지. Vapi 공개 키는 Railway 변수로만 받는다."""
+    cfg = {"publicKey": os.getenv("VAPI_PUBLIC_KEY", ""),
+           "assistantId": os.getenv("VAPI_ASSISTANT_ID", DEFAULT_ASSISTANT)}
+    script = f"<script>window.HANTONG = {json.dumps(cfg)};</script>"
+    return CALL_PAGE.read_text(encoding="utf-8").replace("</head>", script + "\n</head>", 1)
 
 
 # ── 대시보드 화면 ─────────────────────────────────────

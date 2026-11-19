@@ -170,3 +170,11 @@ def test_messy_vapi_values_do_not_break_the_request():
     assert ex.companion_needed == "yes" and ex.wheelchair_needed == "unknown" and ex.intent == "other"
     assert ex.date is None and ex.time_expr is None and ex.evidence_village is None and ex.mobility is None
     assert from_dict({**FIELDS, "date": "2026-02-30"}).date is None
+
+
+def test_call_page_injects_config_from_env(monkeypatch):
+    html = client.get("/call").text
+    assert "window.HANTONG" in html and '"publicKey": ""' in html  # 키가 없으면 '설정 중'으로 보인다
+    monkeypatch.setenv("VAPI_PUBLIC_KEY", "pk-test")
+    html = client.get("/call").text
+    assert '"publicKey": "pk-test"' in html and "e441e44c" in html
