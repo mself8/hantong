@@ -86,6 +86,7 @@ def test_vapi_call_to_confirmation_message():
                       json={"result": "confirmed", "detail": "동행 매니저가 9시에 댁으로 찾아갑니다."}).json()
     assert req["status"] == "confirmed"
     assert "동행 매니저가 9시에 댁으로 찾아갑니다." in req["message"]["text"]
+    assert "요금: 첫 1시간 5,000원" in req["message"]["text"]  # 확정 안내문에 요금이 붙는다
     assert req["message"]["text"].startswith("한○○ 어르신,")
 
     req = client.put(f"/api/requests/{rid}/message", json={"text": "고친 안내문"}).json()
@@ -107,6 +108,9 @@ def test_vapi_structured_output_skips_server_llm(monkeypatch):
     assert req["pickup"]["village"] == "서석면 생곡리"
     # 생곡1리는 확인된 희망택시 마을이고, 휠체어가 필요하다
     assert [a["type"] for a in req["applications"]] == ["hope_taxi", "special_transport"]
+    taxi, special = req["applications"]
+    assert taxi["fields"]["요금"].startswith("1,700원") and any("이장" in n for n in taxi["notes"])
+    assert any("미리 등록한 분만" in n for n in special["notes"])
     assert "신청서 초안 작성 (Vapi가 뽑은 항목으로)" in [h["note"] for h in req["history"]]
 
 

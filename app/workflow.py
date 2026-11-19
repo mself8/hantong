@@ -18,6 +18,13 @@ AGENCIES = {
     "special_transport": {"label": "특별교통수단 이용 신청서", "agency": "광역이동지원센터", "contact": "1577-2014"},
 }
 APP_STATUSES = {"draft": "작성됨", "submitted": "제출함", "confirmed": "확정", "rejected": "불가"}
+# 어르신이 내는 요금. 출처: 병원동행 = 아시아경제 2026-01-15·홍천군노인복지관 안내, 희망택시 = 조례 제4조②·홍천 농어촌버스 요금표,
+# 특별교통수단 = 공공데이터포털 교통약자 이동지원센터 표준데이터(2023-10-05)
+PRICE = {
+    "companion": "첫 1시간 5,000원, 이후 30분마다 1,500원(기초수급·차상위는 1,000원·500원). 차비는 따로예요",
+    "hope_taxi": "1,700원(버스 기본요금과 같아요)",
+    "special_transport": "4km까지 1,100원, 넘으면 1km마다 100원",
+}
 
 
 @lru_cache
@@ -110,14 +117,18 @@ def build_applications(req: dict) -> list[dict]:
             **common,
             "거동 상태": req.get("mobility") or resident.get("mobility") or "확인 필요",
             "동행이 필요한 이유": companion.get("reason") or "확인 필요",
-            "요금": "첫 1시간 5,000원, 이후 30분마다 1,500원 (기초수급·차상위는 1,000원·500원)",
-        }, deadline))
+            "요금": PRICE["companion"],
+        }, deadline + ["대상은 홍천에 사는 65세 이상, 걸을 수 있는 분이에요. 차량은 없어서 교통비는 본인이 내요."]
+           + (["휠체어를 타시면 병원동행 대상인지 노인복지관(033-430-8753)에 확인해야 해요."]
+              if req.get("wheelchair_needed") == "yes" else [])))
 
     taxi = _hope_taxi_match(pickup.get("village"))
     if taxi:
         town = taxi["읍면"]
         notes = [f"확인된 운행 구역: {taxi['리']} {taxi['세부 마을·반'] or ''}".strip(),
-                 "희망택시는 읍·면 소재지까지 운행한다. 홍천읍 병원이면 소재지에서 버스로 갈아타야 한다."]
+                 "개인 등록제가 아니에요. 이장이 날짜·시간·장소를 미리 요청해요.",
+                 "읍·면 소재지까지만 가요. 홍천읍 병원이면 소재지에서 버스로 갈아타요. "
+                 "65세 이상은 교통복지카드가 있으면 농어촌버스가 월 20회 무료예요."]
         apps.append(_app("hope_taxi", len(apps) + 1, {
             "마을": pickup.get("village"),
             "승차 지점": pickup.get("point") or "마을회관 (확인 필요)",
@@ -125,6 +136,7 @@ def build_applications(req: dict) -> list[dict]:
             "목적지": f"{town} 소재지" if town != "홍천읍" else "홍천읍내 병원",
             "인원": "1명" + (" + 동행 매니저" if companion.get("needed") == "yes" else ""),
             "왕복 여부": "왕복",
+            "요금": PRICE["hope_taxi"],
         }, notes))
 
     if req.get("wheelchair_needed") == "yes":
@@ -134,7 +146,11 @@ def build_applications(req: dict) -> list[dict]:
             "목적지": common["병원"],
             "휠체어": "필요",
             "교통약자 등록": "확인 필요",
-        }, ["특별교통수단은 교통약자로 미리 등록한 사람만 쓸 수 있다."]))
+            "요금": PRICE["special_transport"],
+        }, ["미리 등록한 분만 탈 수 있어요. 등록 안 했으면 신청서·신분증·휠체어 이용 증빙을 내고, 결과까지 최대 14일 걸려요.",
+            "예약은 7일 전부터 하루 전까지 광역이동지원센터(1577-2014)로 해요."]
+           + (["관외 병원이에요. 노인 자격으로 등록한 분은 홍천 안에서만 탈 수 있어서 확인이 필요해요."]
+              if any(c.get("far") for c in (req.get("hospital") or {}).get("candidates") or []) else [])))
     return apps
 
 
@@ -180,7 +196,7 @@ def confirmation_text(req: dict) -> str:
     for a in req.get("applications") or []:
         resp = a.get("response") or {}
         if a["status"] == "confirmed":
-            lines.append(f"{SHORT[a['type']]}: {resp.get('detail') or '확정되었습니다.'}")
+            lines.append(f"{SHORT[a['type']]}: {resp.get('detail') or '확정되었습니다.'} (요금: {PRICE[a['type']]})")
         elif a["status"] == "rejected":
             lines.append(f"{_topic(SHORT[a['type']])} 이번에는 어렵습니다. 담당자가 다시 연락드리겠습니다.")
     if not req.get("applications"):
