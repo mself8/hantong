@@ -132,7 +132,7 @@
   .turn.ai { background: var(--bg); align-self: flex-start; }
   .turn.elder { background: var(--primary-soft); align-self: flex-end; }
   .turn i { display: block; font-style: normal; font-size: 13px; color: var(--text-3); }
-  details.log summary { cursor: pointer; color: var(--text-2); font-size: 16px; }
+  .log-box { background: #fff; border: 1px solid var(--line-soft); border-radius: 14px; padding: 16px; margin-top: 0; max-height: 520px; overflow-y: auto; }
   .foot { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line-soft); display: flex; justify-content: flex-end; }
   .foot .linkbtn { color: var(--text-3); }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: #fff; padding: 12px 18px; border-radius: 12px;
@@ -284,9 +284,6 @@ function renderDetail() {
   else msg = `<div class="sms">${esc(m.text)}</div><div class="msg-tools"><button class="linkbtn" data-act="editmsg">문구 고치기</button></div>`;
   const msgPart = `<section class="part"><h3>어르신께 보낼 안내 문자</h3>${msg}</section>`;
 
-  const quotes = [["병원", ev.hospital], ["날짜", ev.date], ["동행", ev.companion], ["마을", ev.village]].filter(([, q]) => q)
-    .map(([k, q]) => `<div class="quote"><b>${k}</b>"${esc(q)}"</div>`).join("");
-  const quotePart = quotes ? `<section class="part"><h3>어르신 말씀</h3><div class="quotes">${quotes}</div></section>` : "";
   const turns = (r.transcript || []).map((t) => `<div class="turn ${t.role === "elder" ? "elder" : "ai"}"><i>${t.role === "elder" ? "어르신" : "AI 상담원"}</i>${esc(t.text)}</div>`).join("");
 
   $("detail").innerHTML = `
@@ -294,8 +291,8 @@ function renderDetail() {
       <div class="sub">${badge(r.status, STATUS[r.status] || r.status)} <span class="num">${md(r.created_at)} ${hhmm(r.created_at)}</span> 전화${res.village ? " · " + esc(res.village) : ""}</div></div>
       <div class="act">${action(r)}</div></div>
     <div class="facts">${fact("가는 날", day)}${fact("병원", hosp)}${fact("필요한 도움", helps.length ? helps.join("<br>") : "교통만")}${fact("사는 곳", place)}</div>
-    ${callout}${appsPart}${msgPart}${quotePart}
-    <section class="part"><details class="log"><summary>통화 기록 전체 보기 (${(r.transcript || []).length}줄)</summary><div class="turns">${turns}</div></details></section>
+    ${callout}${appsPart}${msgPart}
+    <section class="part"><h3>통화 기록 전체 <span class="cnt">${(r.transcript || []).length}줄</span></h3><div class="turns log-box">${turns}</div></section>
     <div class="foot">${r.status !== "held" && r.status !== "notified" ? `<button class="linkbtn" data-act="hold">이 요청 보류하기</button>` : ""}</div>`;
 }
 
