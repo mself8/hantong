@@ -80,6 +80,18 @@
   .tool.active svg { fill: #101826; }
   .tool svg { width: 28px; height: 28px; fill: #fff; }
   body.live-mode .controls { display: none; }
+  /* 발표장 큰 화면(/live를 노트북·프로젝터로 띄울 때): 넓게, 글씨 크게 */
+  @media (min-width: 900px) {
+    body.live-mode .phone { max-width: 1000px; }
+    body.live-mode .avatar.sm { width: 84px; height: 84px; font-size: 34px; }
+    body.live-mode .talk-name { font-size: 32px; }
+    body.live-mode .talk-status { font-size: 22px; }
+    body.live-mode .log { gap: 16px; }
+    body.live-mode .bubble { font-size: 30px; max-width: 80%; padding: 16px 22px; border-radius: 22px; }
+    body.live-mode .bubble .who { font-size: 17px; }
+    body.live-mode .log-empty { font-size: 26px; }
+    body.live-mode .handoff { font-size: 24px; padding: 16px 22px; }
+  }
 </style>
 </head>
 <body>
