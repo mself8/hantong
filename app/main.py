@@ -15,7 +15,7 @@ from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import pipeline, store, view
+from . import live, pipeline, store, view
 from .data import hospitals, villages, voice_cards
 
 mimetypes.add_type("font/woff2", ".woff2")  # 글꼴 파일을 글꼴 형식으로 내보낸다
@@ -53,17 +53,44 @@ async def vapi_webhook(request: Request, bg: BackgroundTasks,
         raise HTTPException(status_code=401, detail="bad secret")
     body = await request.json()
     msg = body.get("message") or {}
-    if msg.get("type") != "end-of-call-report":
+    kind = msg.get("type") or ""
+    if kind.startswith("transcript") or kind in ("conversation-update", "status-update"):
+        live.update(msg)  # 통화 중 대화를 화면(/call, /live)에 실시간으로 보여 준다
+        return {"ok": True}
+    if kind != "end-of-call-report":
         return {"ok": True}
     turns, call, caller = pipeline.parse_vapi_report(msg)
     if not any(t["role"] == "elder" for t in turns):
+        live.finish(msg, None, turns)
         return {"ok": True, "skipped": "어르신 말이 없는 통화"}
     prefill = pipeline.vapi_structured(msg)
     # 첫 통화 점검용: 내용은 남기지 않고 어떤 칸이 왔는지만 남긴다
     log.info("vapi report: artifact=%s structured=%s", sorted((msg.get("artifact") or {}).keys()), bool(prefill))
     req = pipeline.new_request(turns, source="phone", call=call, caller=caller, prefill=prefill)
+    live.finish(msg, req["id"], turns)
     bg.add_task(pipeline.process, req["id"])
     return {"ok": True, "id": req["id"]}
+
+
+def _live_view(s: dict | None) -> dict:
+    if not s:
+        return {"id": None}
+    if s["request_id"]:  # 정리가 끝나면 담당자에게 넘어간 한 줄 요약을 붙인다
+        req = store.get(s["request_id"])
+        if req and req.get("status") != "processing":
+            s["summary"] = req.get("summary")
+    return s
+
+
+@app.get("/api/live")
+def live_latest() -> dict:
+    """가장 최근에 시작한 통화의 대화 (발표 화면용)."""
+    return _live_view(live.snapshot())
+
+
+@app.get("/api/live/{cid}")
+def live_call(cid: str) -> dict:
+    return _live_view(live.snapshot(cid))
 
 
 # ── 대시보드 API ──────────────────────────────────────
@@ -194,13 +221,22 @@ PAPERLOGY = "".join(f"@font-face{{font-family:'Paperlogy';src:url('/fonts/Paperl
 DEFAULT_ASSISTANT = "e441e44c-5204-458d-a2d2-f8676774de27"
 
 
+def _call_html(cfg: dict) -> str:
+    script = f"<script>window.HANTONG = {json.dumps(cfg, ensure_ascii=False)};</script>"
+    return CALL_PAGE.read_text(encoding="utf-8").replace("</head>", script + "\n</head>", 1)
+
+
 @app.get("/call", response_class=HTMLResponse)
 def call_page() -> str:
     """휴대폰 브라우저에서 AI 상담원과 바로 통화하는 페이지. Vapi 공개 키는 Railway 변수로만 받는다."""
-    cfg = {"publicKey": os.getenv("VAPI_PUBLIC_KEY", ""),
-           "assistantId": os.getenv("VAPI_ASSISTANT_ID", DEFAULT_ASSISTANT)}
-    script = f"<script>window.HANTONG = {json.dumps(cfg)};</script>"
-    return CALL_PAGE.read_text(encoding="utf-8").replace("</head>", script + "\n</head>", 1)
+    return _call_html({"publicKey": os.getenv("VAPI_PUBLIC_KEY", ""),
+                       "assistantId": os.getenv("VAPI_ASSISTANT_ID", DEFAULT_ASSISTANT)})
+
+
+@app.get("/live", response_class=HTMLResponse)
+def live_page() -> str:
+    """발표 화면용: 지금 걸려 온 통화(실제 전화 포함)의 대화를 실시간으로 보여 준다."""
+    return _call_html({"mode": "live", "phone": os.getenv("HANTONG_PHONE", "+1 346-372-7261")})
 
 
 @app.get("/api/voice-cards")

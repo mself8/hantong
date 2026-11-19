@@ -9,34 +9,34 @@
 @font-face{font-family:"Paperlogy";src:url("/fonts/Paperlogy-4Regular.woff2") format("woff2");font-weight:400;font-display:swap}
 @font-face{font-family:"Paperlogy";src:url("/fonts/Paperlogy-6SemiBold.woff2") format("woff2");font-weight:600;font-display:swap}
 @font-face{font-family:"Paperlogy";src:url("/fonts/Paperlogy-7Bold.woff2") format("woff2");font-weight:700;font-display:swap}
-  :root { --bg1: #101826; --bg2: #1d2a3d; --text: #ffffff; --muted: #a9b4c4; --go: #22c55e; --stop: #ef4444; --chip: rgba(255,255,255,.12); }
+  :root { --bg1: #101826; --bg2: #1d2a3d; --text: #ffffff; --muted: #a9b4c4; --go: #22c55e; --stop: #ef4444; --chip: rgba(255,255,255,.12);
+    --ai: #26364e; --ai-who: #a3b6cf; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; }
+  html, body { margin: 0; height: 100%; }
   body { background: linear-gradient(180deg, var(--bg1), var(--bg2)); color: var(--text); font-family: "Paperlogy", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-    word-break: keep-all; -webkit-font-smoothing: antialiased; }
-  .phone { max-width: 440px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center;
-    padding: max(28px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom)); }
+    word-break: keep-all; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  .phone { position: relative; max-width: 440px; height: 100vh; height: 100dvh; margin: 0 auto; overflow: hidden; }
+  /* 화면 두 장: 전화 걸기 → 통화(대화가 글자로 쌓인다). 걸면 옆으로 넘어간다 */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    padding: max(28px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)); transition: opacity .35s ease, transform .35s ease; }
+  .dial { overflow-y: auto; }
+  .talk { opacity: 0; transform: translateX(56px); pointer-events: none; }
+  body.in-call .dial { opacity: 0; transform: translateX(-56px); pointer-events: none; }
+  body.in-call .talk { opacity: 1; transform: none; pointer-events: auto; }
+  @media (prefers-reduced-motion: reduce) { .screen { transition: none; } }
+
   .brand { color: var(--muted); font-size: 15px; letter-spacing: .5px; flex: 1 1 0; }
   .bottom { flex: 1 1 0; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
-  .center { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 24px 0; }
-  .who { display: flex; flex-direction: column; align-items: center; text-align: center; }
-  .avatar { width: 132px; height: 132px; border-radius: 50%; display: grid; place-items: center; font-size: 52px; font-weight: 700;
+  .center { width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 0; }
+  .avatar { flex: none; width: 132px; height: 132px; border-radius: 50%; display: grid; place-items: center; font-size: 52px; font-weight: 700;
     background: radial-gradient(circle at 30% 30%, #4ade80, #15803d); box-shadow: 0 0 0 0 rgba(74, 222, 128, .5); }
+  .avatar.sm { width: 64px; height: 64px; font-size: 26px; }
   .avatar.talking { animation: pulse 1.2s ease-out infinite; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(74,222,128,.55); } 100% { box-shadow: 0 0 0 26px rgba(74,222,128,0); } }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(74,222,128,.55); } 100% { box-shadow: 0 0 0 18px rgba(74,222,128,0); } }
   .name { font-size: 30px; font-weight: 700; margin-top: 22px; }
-  .status { font-size: 20px; margin-top: 14px; min-height: 30px; font-variant-numeric: tabular-nums; }
-  .hint { color: var(--muted); font-size: 15px; margin-top: 4px; min-height: 22px; text-align: center; }
-  .controls { display: flex; align-items: flex-start; justify-content: center; gap: 28px; margin-top: 28px; }
-  .slot { width: 64px; padding-top: 9px; }
-  .tools { visibility: hidden; }
-  .tools.on { visibility: visible; }
-  .tool { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; background: none; border: 0; font-family: inherit; padding: 0; }
-  .tool span.c { width: 64px; height: 64px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; }
-  .tool.active span.c { background: #fff; }
-  .tool.active svg { fill: #101826; }
-  .tool svg { width: 28px; height: 28px; fill: #fff; }
+  .status { font-size: 20px; margin-top: 14px; min-height: 30px; }
   .mainwrap { display: flex; flex-direction: column; align-items: center; }
+  .dial .mainwrap { margin-top: 36px; }
   .main-btn { width: 82px; height: 82px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
     background: var(--go); box-shadow: 0 10px 28px rgba(34, 197, 94, .35); transition: transform .12s; }
   .main-btn:active { transform: scale(.95); }
@@ -47,20 +47,71 @@
   .label { margin-top: 10px; color: var(--muted); font-size: 15px; }
   .script { width: 100%; margin-top: 28px; background: rgba(255,255,255,.08); border-radius: 16px; padding: 14px 16px; font-size: 15px; line-height: 1.6; }
   .script b { display: block; color: #fff; margin-bottom: 6px; }
-  .script div span { color: var(--muted); }
+  .script div span, .card-mini div span { color: var(--muted); }
   .note { color: var(--muted); font-size: 12px; margin-top: 18px; text-align: center; line-height: 1.5; }
+
+  .talk-head { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding-bottom: 12px; }
+  .talk-name { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .talk-status { font-size: 15px; color: var(--muted); min-height: 22px; font-variant-numeric: tabular-nums; }
+  .card-mini { flex: none; width: 100%; max-height: 28vh; overflow-y: auto; background: rgba(255,255,255,.08); border-radius: 12px;
+    padding: 10px 14px; font-size: 14px; line-height: 1.55; margin-bottom: 10px; }
+  .card-mini summary { cursor: pointer; font-weight: 700; }
+  .log { flex: 1 1 auto; min-height: 0; width: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 0 12px; overscroll-behavior: contain; }
+  .log-empty, .sys { color: var(--muted); font-size: 16px; text-align: center; line-height: 1.6; }
+  .log-empty { margin: auto; }
+  .bubble { max-width: 86%; border-radius: 16px; padding: 12px 15px; font-size: 19px; line-height: 1.55; animation: rise .25s ease both; }
+  .bubble .who { font-size: 13px; margin-bottom: 3px; }
+  .bubble.ai { align-self: flex-start; background: var(--ai); }
+  .bubble.ai .who { color: var(--ai-who); }
+  .bubble.elder { align-self: flex-end; background: #fff; color: #1b1f24; }
+  .bubble.elder .who { color: #4a5560; }
+  .bubble .live { opacity: .5; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .handoff { flex: none; width: 100%; margin-top: 8px; border-radius: 12px; padding: 12px 14px; font-size: 15px; line-height: 1.5;
+    background: #e3f1ef; color: #0b5e57; font-weight: 700; }
+  .handoff.wait { background: rgba(255,255,255,.1); color: var(--muted); font-weight: 400; }
+  .controls { flex: none; display: flex; align-items: flex-start; justify-content: center; gap: 28px; margin-top: 14px; }
+  .slot { width: 64px; padding-top: 9px; }
+  .tools { visibility: hidden; }
+  .tools.on { visibility: visible; }
+  .tool { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; background: none; border: 0; font-family: inherit; padding: 0; }
+  .tool span.c { width: 64px; height: 64px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; }
+  .tool.active span.c { background: #fff; }
+  .tool.active svg { fill: #101826; }
+  .tool svg { width: 28px; height: 28px; fill: #fff; }
+  body.live-mode .controls { display: none; }
 </style>
 </head>
 <body>
 <main class="phone">
-  <div class="brand">한 통이면 돼유</div>
-  <div class="center">
-    <div class="who">
-      <div class="avatar" id="avatar" aria-hidden="true">한</div>
+  <section class="screen dial" id="dial">
+    <div class="brand">한 통이면 돼유</div>
+    <div class="center">
+      <div class="avatar" aria-hidden="true">한</div>
       <div class="name">홍천군 AI 상담원</div>
-      <div class="status" id="status" aria-live="polite">준비 중…</div>
-      <div class="hint" id="hint"></div>
+      <div class="status" id="dialStatus" aria-live="polite">준비 중…</div>
+      <div class="mainwrap">
+        <button class="main-btn" id="dialBtn" type="button" disabled aria-label="전화 걸기">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>
+        </button>
+        <div class="label">전화 걸기</div>
+      </div>
     </div>
+    <div class="bottom">
+      <div class="script" id="script" hidden></div>
+      <p class="note">마이크 사용을 허용해 주세요. 시연용 인터넷 통화라 요금이 들지 않아요.<br>실제 서비스는 군 대표번호로 전화를 받습니다.</p>
+    </div>
+  </section>
+
+  <section class="screen talk" id="talk" inert>
+    <div class="talk-head">
+      <div class="avatar sm" id="avatar" aria-hidden="true">한</div>
+      <div class="talk-name">홍천군 AI 상담원</div>
+      <div class="talk-status" id="status" aria-live="polite"></div>
+    </div>
+    <details class="card-mini" id="cardMini" open hidden><summary id="cardMiniTitle"></summary><div id="cardMiniBody"></div></details>
+    <div class="log" id="log"></div>
+    <div class="handoff wait" id="handoff" hidden></div>
     <div class="controls">
       <div class="slot tools" id="tools">
         <button class="tool" id="mute" type="button" aria-pressed="false">
@@ -69,30 +120,76 @@
         </button>
       </div>
       <div class="mainwrap">
-        <button class="main-btn" id="btn" type="button" disabled aria-label="전화 걸기">
+        <button class="main-btn end" id="btn" type="button" aria-label="통화 끝내기">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>
         </button>
-        <div class="label" id="label">전화 걸기</div>
+        <div class="label" id="label">통화 끝내기</div>
       </div>
       <div class="slot"></div>
     </div>
-  </div>
-
-  <div class="bottom">
-    <div class="script" id="script" hidden></div>
-    <p class="note">마이크 사용을 허용해 주세요. 시연용 인터넷 통화라 요금이 들지 않아요.<br>실제 서비스는 군 대표번호로 전화를 받습니다.</p>
-  </div>
+  </section>
 </main>
 
 <script type="module">
   const cfg = window.HANTONG || {};
   const $ = (id) => document.getElementById(id);
   const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  const btn = $("btn"), label = $("label"), status = $("status"), hint = $("hint"), avatar = $("avatar"), tools = $("tools"), mute = $("mute");
+  const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const log = $("log"), statusEl = $("status"), handoff = $("handoff"), avatar = $("avatar");
   const cardId = new URLSearchParams(location.search).get("card");
-  let live = false, timer = null, started = 0;
 
-  // 시험 카드(/call?card=V01)면 대본을 아래에 보여 준다
+  function showTalk() { document.body.classList.add("in-call"); $("dial").inert = true; $("talk").inert = false; }
+
+  // ── 대화 말풍선: 서버가 통화 중에 모은 대화로 그린다(웹 통화·실제 전화 공통) ──
+  let bubbles = [];
+  function resetLog(emptyText) {
+    bubbles = [];
+    log.innerHTML = `<p class="log-empty" id="logEmpty">${esc(emptyText)}</p>`;
+    handoff.hidden = true;
+  }
+  function sysLine(text) {
+    $("logEmpty")?.remove();
+    log.insertAdjacentHTML("beforeend", `<p class="sys">${esc(text)}</p>`);
+  }
+  function renderTurns(turns) {
+    if (turns.length) $("logEmpty")?.remove();
+    const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 80;  // 위로 올려 읽는 중이면 따라 내려가지 않는다
+    turns.forEach((t, i) => {
+      let b = bubbles[i];
+      if (!b) {
+        b = document.createElement("div");
+        b.className = "bubble " + (t.role === "ai" ? "ai" : "elder");
+        b.innerHTML = `<div class="who">${t.role === "ai" ? "AI 상담원" : "어르신"}</div><div class="txt"></div>`;
+        log.appendChild(b);
+        bubbles[i] = b;
+      }
+      const html = esc(t.text) + (t.partial ? `${t.text ? " " : ""}<span class="live">${esc(t.partial)}</span>` : "");
+      if (b._html !== html) { b.querySelector(".txt").innerHTML = html; b._html = html; }
+    });
+    if (stick) log.scrollTop = log.scrollHeight;
+  }
+  function renderHandoff(s) {
+    const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 80;  // 줄이 생기며 대화 칸이 줄어도 마지막 말이 보이게
+    handoff.hidden = false;
+    if (s.summary) { handoff.className = "handoff"; handoff.textContent = "담당자에게 전달: " + s.summary; }
+    else if (s.skipped) { handoff.className = "handoff wait"; handoff.textContent = "어르신 말씀이 없어서 신청은 만들지 않았어요"; }
+    else { handoff.className = "handoff wait"; handoff.textContent = "담당 공무원 화면으로 보내는 중…"; }
+    if (stick) log.scrollTop = log.scrollHeight;
+  }
+  let followId = 0;
+  function follow(url, onState) {  // 0.6초마다 서버에서 대화를 가져온다. onState가 false를 돌려주면 멈춘다
+    const my = ++followId;
+    const tick = async () => {
+      if (my !== followId) return;
+      let s = null;
+      try { s = await (await fetch(url, { cache: "no-store" })).json(); } catch (e) {}
+      if (my !== followId) return;
+      if (onState(s) !== false) setTimeout(tick, 600);
+    };
+    tick();
+  }
+
+  // 시험 카드(/call?card=V01)면 대본을 보여 준다
   if (cardId) {
     try {
       const cards = await (await fetch("/api/voice-cards")).json();
@@ -106,87 +203,131 @@
         else if (/^날짜 정정 전/.test(sp)) sp = `처음엔 다른 날을 말했다가 '${c.날짜표현}'로 고쳐 말해요`;
         const rows = [["말하는 방식", c.말하는_방식], ["병원", c.병원표현], ["날짜", c.날짜표현], ["시간", c.도착희망시각], ["동행", go],
           ["사는 마을", c.출발마을 === "모름" ? "물어도 모른다고 해요" : c.출발마을], ["특별 지시", sp], ["말투 예", c.말투 ? "~" + c.말투 : ""], ["딴 얘기", c.딴얘기]].filter(([, v]) => v);
+        const body = rows.map(([k, v]) => `<div><span>${esc(k)}</span> · ${esc(v)}</div>`).join("");
+        const title = `시험 카드 ${esc(c.call_id)} · 어르신 역할로 말해 주세요`;
         $("script").hidden = false;
-        $("script").innerHTML = `<b>시험 카드 ${esc(c.call_id)} · 어르신 역할로 말해 주세요</b>` + rows.map(([k, v]) => `<div><span>${esc(k)}</span> · ${esc(v)}</div>`).join("");
+        $("script").innerHTML = `<b>${title}</b>` + body;
+        $("cardMini").hidden = false;  // 통화 화면에서도 대본을 펼쳐 볼 수 있게
+        $("cardMiniTitle").innerHTML = title;
+        $("cardMiniBody").innerHTML = body;
       }
     } catch (e) { console.error(e); }
   }
 
-  // 신호음(한국 통화 연결음: 440+480Hz, 1초 울리고 2초 쉼)
-  let ac = null, ringTimer = null;
-  function ring(on) {
-    if (!on) { clearInterval(ringTimer); ringTimer = null; if (ac) { ac.close(); ac = null; } return; }
-    ac = new (window.AudioContext || window.webkitAudioContext)();
-    const beep = () => {
-      const g = ac.createGain(); g.gain.value = 0.08; g.connect(ac.destination);
-      for (const f of [440, 480]) { const o = ac.createOscillator(); o.frequency.value = f; o.connect(g); o.start(); o.stop(ac.currentTime + 1); }
-    };
-    beep(); ringTimer = setInterval(beep, 3000);
-  }
-  const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  function setState(state) {
-    btn.classList.toggle("end", state === "calling" || state === "live");
-    btn.setAttribute("aria-label", state === "idle" || state === "ended" ? "전화 걸기" : "통화 끝내기");
-    label.textContent = state === "idle" ? "전화 걸기" : state === "ended" ? "다시 걸기" : "통화 끝내기";
-    tools.classList.toggle("on", state === "live");
-    if (state !== "live") avatar.classList.remove("talking");
-  }
-
-  if (!cfg.publicKey) {
-    status.textContent = "아직 설정 중이에요";
-    hint.textContent = "잠시 뒤에 다시 열어 주세요.";
+  if (cfg.mode === "live") {
+    // ── 발표 화면(/live): 실제 전화든 웹 통화든, 가장 최근 통화를 따라가며 보여 준다 ──
+    document.body.classList.add("live-mode");
+    document.title = "한 통이면 돼유 · 실시간 통화";
+    showTalk();
+    const waiting = cfg.phone ? `전화 기다리는 중 · ${cfg.phone}` : "전화 기다리는 중";
+    let shown = null, base = 0, fetchedAt = 0, ended = true, kind = "phone";
+    resetLog("전화가 오면 대화가 여기에 실시간으로 나와요");
+    statusEl.textContent = waiting;
+    follow("/api/live", (s) => {
+      const fresh = s && s.id && !(s.ended && s.ended_ago > 600);  // 끝난 지 10분 지난 통화는 내린다
+      if (!fresh) {
+        if (shown) { shown = null; resetLog("전화가 오면 대화가 여기에 실시간으로 나와요"); statusEl.textContent = waiting; avatar.classList.remove("talking"); }
+        return;
+      }
+      if (s.id !== shown) { shown = s.id; resetLog("연결되면 대화가 여기에 글자로 나와요"); }
+      renderTurns(s.turns);
+      if (s.ended) renderHandoff(s); else handoff.hidden = true;
+      const last = s.turns[s.turns.length - 1];
+      avatar.classList.toggle("talking", !s.ended && !!last && last.role === "ai" && !!last.partial);
+      base = s.elapsed; fetchedAt = Date.now(); ended = s.ended; kind = s.kind;
+    });
+    setInterval(() => {
+      if (!shown) return;
+      const sec = ended ? base : base + Math.floor((Date.now() - fetchedAt) / 1000);
+      statusEl.textContent = `${kind === "phone" ? "실제 전화" : "웹 통화"} · ${ended ? "통화 종료" : "통화 중"} ${mmss(sec)}`;
+    }, 500);
+  } else if (!cfg.publicKey) {
+    $("dialStatus").textContent = "아직 설정 중이에요";
   } else {
+    // ── 웹 통화(/call) ──
+    // 신호음(한국 통화 연결음: 440+480Hz, 1초 울리고 2초 쉼)
+    let ac = null, ringTimer = null;
+    function ring(on) {
+      if (!on) { clearInterval(ringTimer); ringTimer = null; if (ac) { ac.close(); ac = null; } return; }
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      const beep = () => {
+        const g = ac.createGain(); g.gain.value = 0.08; g.connect(ac.destination);
+        for (const f of [440, 480]) { const o = ac.createOscillator(); o.frequency.value = f; o.connect(g); o.start(); o.stop(ac.currentTime + 1); }
+      };
+      beep(); ringTimer = setInterval(beep, 3000);
+    }
+
     let Vapi;
     try { const mod = await import("https://esm.sh/@vapi-ai/web@3.1.0"); Vapi = mod.default?.default ?? mod.default; }
     catch (e) { const mod = await import("https://cdn.jsdelivr.net/npm/@vapi-ai/web@3.1.0/+esm"); Vapi = mod.default?.default ?? mod.default; }
     const vapi = new Vapi(cfg.publicKey);
-    let state = "idle", cancelled = false;  // idle → calling(신호음) → live(통화 중) → ended
+    const btn = $("btn"), label = $("label"), tools = $("tools"), mute = $("mute");
+    let state = "idle", cancelled = false, timer = null, started = 0, endedAt = 0, callId = null;  // idle → calling(신호음) → live(통화 중) → ended
 
+    function setState(s) {
+      state = s;
+      btn.classList.toggle("end", s === "calling" || s === "live");
+      btn.setAttribute("aria-label", s === "ended" ? "다시 걸기" : "통화 끝내기");
+      label.textContent = s === "ended" ? "다시 걸기" : "통화 끝내기";
+      tools.classList.toggle("on", s === "live");
+      if (s !== "live") avatar.classList.remove("talking");
+    }
     const ended = (msg) => {
-      if (state === "ended") return;  // 버튼과 'call-end' 알림이 겹쳐도 한 번만 처리
+      if (state !== "calling" && state !== "live") return;  // 버튼과 'call-end' 알림이 겹쳐도 한 번만 처리
       ring(false); clearInterval(timer);
       const dur = started ? mmss(Math.floor((Date.now() - started) / 1000)) : null;
-      live = false; started = 0; state = "ended"; setState("ended"); btn.disabled = false;
-      status.textContent = dur ? `통화 종료 · ${dur}` : "통화 종료";
-      hint.textContent = msg;
+      started = 0; endedAt = Date.now(); setState("ended"); btn.disabled = false;
+      statusEl.textContent = dur ? `통화 종료 · ${dur}` : "통화 종료";
+      if (msg) sysLine(msg);
+      if (callId && !msg) renderHandoff({});
     };
     vapi.on("call-start", () => {
       if (cancelled) { try { vapi.end(); } catch (e) {} return; }  // 신호음 중에 취소했는데 뒤늦게 연결되면 바로 끊는다
-      ring(false); live = true; state = "live"; started = Date.now(); setState("live"); btn.disabled = false;
-      status.textContent = "통화 중 00:00"; hint.textContent = "편하게 말씀하세요";
-      timer = setInterval(() => { status.textContent = "통화 중 " + mmss(Math.floor((Date.now() - started) / 1000)); }, 500);
+      ring(false); setState("live"); started = Date.now(); btn.disabled = false;
+      statusEl.textContent = "통화 중 00:00";
+      timer = setInterval(() => { statusEl.textContent = "통화 중 " + mmss(Math.floor((Date.now() - started) / 1000)); }, 500);
     });
-    vapi.on("speech-start", () => { if (state === "live") { avatar.classList.add("talking"); hint.textContent = "상담원이 말하는 중이에요"; } });
-    vapi.on("speech-end", () => { avatar.classList.remove("talking"); if (state === "live") hint.textContent = "편하게 말씀하세요"; });
-    vapi.on("call-end", () => { if (state === "live" || state === "calling") ended("신청이 담당 공무원 화면에 올라갔어요"); });
-    vapi.on("error", (e) => { console.error(e); if (state !== "ended") ended("연결에 문제가 생겼어요. 다시 걸어 주세요."); });
+    vapi.on("speech-start", () => { if (state === "live") avatar.classList.add("talking"); });
+    vapi.on("speech-end", () => avatar.classList.remove("talking"));
+    vapi.on("call-end", () => ended());
+    vapi.on("error", (e) => { console.error(e); ended("연결에 문제가 생겼어요. 다시 걸어 주세요."); });
 
     mute.addEventListener("click", () => {
       const on = !vapi.isMuted(); vapi.setMuted(on);
       mute.classList.toggle("active", on); mute.setAttribute("aria-pressed", String(on));
     });
+    async function startCall() {
+      showTalk();
+      followId++; resetLog("연결되면 대화가 여기에 글자로 나와요");
+      callId = null; cancelled = false; setState("calling"); statusEl.textContent = "전화 거는 중…";
+      mute.classList.remove("active"); mute.setAttribute("aria-pressed", "false");
+      ring(true);
+      try {
+        const call = await vapi.start(cfg.assistantId, cardId ? { metadata: { card: cardId } } : undefined);
+        if (cancelled || !call?.id) return;
+        callId = call.id;
+        follow(`/api/live/${encodeURIComponent(callId)}`, (s) => {
+          if (s && s.id) renderTurns(s.turns);
+          if (state === "ended") {
+            if (s && s.id) renderHandoff(s);
+            if ((s && (s.summary || s.skipped)) || Date.now() - endedAt > 90000) return false;
+          }
+        });
+      } catch (e) { console.error(e); if (!cancelled) ended("마이크를 허용했는지 확인하고 다시 걸어 주세요."); }
+    }
+    $("dialBtn").addEventListener("click", startCall);
     btn.addEventListener("click", async () => {
       if (state === "live") {  // 통화 끝내기: 상담원 쪽까지 끊고(end) 화면도 바로 바꾼다
         try { vapi.end(); } catch (e) { console.error(e); }
-        ended("신청이 담당 공무원 화면에 올라갔어요");
-        return;
-      }
-      if (state === "calling") {  // 신호음 중 취소
+        ended();
+      } else if (state === "calling") {  // 신호음 중 취소
         cancelled = true;
         try { await vapi.stop(); } catch (e) { console.error(e); }
         ended("전화를 취소했어요");
-        return;
-      }
-      cancelled = false; state = "calling"; setState("calling");
-      status.textContent = "전화 거는 중…"; hint.textContent = ""; mute.classList.remove("active");
-      ring(true);
-      try { await vapi.start(cfg.assistantId, cardId ? { metadata: { card: cardId } } : undefined); }
-      catch (e) { console.error(e); if (!cancelled) ended("마이크를 허용했는지 확인하고 다시 걸어 주세요."); }
+      } else if (state === "ended") startCall();
     });
-    btn.disabled = false;
-    setState("idle");
-    status.textContent = "버튼을 누르면 전화가 걸려요";
-    hint.textContent = "";
+    $("dialBtn").disabled = false;
+    $("dialStatus").textContent = "버튼을 누르면 전화가 걸려요";
   }
 </script>
 </body>
