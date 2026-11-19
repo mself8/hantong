@@ -74,6 +74,15 @@ def pickup_address(pickup: dict) -> str | None:
     return f"{m['address']} ({m['name']}){m['tail']}" if m else None
 
 
+def form_address(pickup: dict) -> str:
+    """대시보드 주소 칸과 공식 신청서 주소 칸에 같이 쓰는 주소. 지도에서 찾은 실제 주소가 먼저, 없으면 마을과 들은 말."""
+    found = pickup_address(pickup)
+    if found:
+        return found
+    base = f"강원특별자치도 홍천군 {pickup['village']}" if pickup.get("village") else "강원특별자치도 홍천군 (마을 확인 필요)"
+    return base + (f" ({pickup['detail']})" if pickup.get("detail") else "")
+
+
 def _transport(req: dict, why_place: str | None) -> dict:
     """교통수단: 통화에서 받은 휠체어 여부와 사는 마을로 정한다(어르신께 따로 묻지 않는다)."""
     p, res = req.get("pickup") or {}, req.get("resident") or {}
@@ -149,10 +158,9 @@ def facts(req: dict) -> dict:
                else "등록된 주소로 채웠어요" if "village_from_roster" in checks
                else "등록된 주소와 달라요" if "village_mismatch" in checks
                else None if p.get("detail") else "모시러 갈 곳을 듣지 못했어요")
-        f["place"] = {"value": p["village"], "sub": p.get("detail") or p.get("point") or "모시러 갈 곳 모름",
-                      "level": "check" if why else "ok", "why": why}
-        if p.get("map"):  # 카카오맵에서 찾은 실제 주소와 지도 링크
-            f["place"].update(addr=pickup_address(p), url=p["map"].get("url"))
+        f["place"] = {"value": form_address(p), "sub": "", "level": "check" if why else "ok", "why": why}
+        if p.get("map"):  # 카카오맵에서 찾은 곳은 지도 링크도 준다
+            f["place"]["url"] = p["map"].get("url")
             if p["map"].get("alts") and not why:
                 f["place"].update(level="check", why=f"같은 리에 {', '.join(p['map']['alts'])}도 있어요. 어느 곳인지 확인이 필요해요")
     else:

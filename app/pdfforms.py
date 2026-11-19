@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pymupdf as fitz
 
-from .workflow import elder_name, pickup_address
+from .workflow import elder_name, form_address
 
 HERE = Path(__file__).resolve().parent
 FORMS = HERE / "forms"
@@ -41,11 +41,7 @@ def _check(page: fitz.Page, x: float, y: float) -> None:
 
 
 def _addr(req: dict) -> str:
-    p = req.get("pickup") or {}
-    if pickup_address(p):  # 카카오맵에서 찾은 실제 주소
-        return pickup_address(p)
-    base = f"강원특별자치도 홍천군 {p['village']}" if p.get("village") else "강원특별자치도 홍천군 (마을 확인 필요)"
-    return base + (f" ({p['detail']})" if p.get("detail") else "")
+    return form_address(req.get("pickup") or {})  # 대시보드 주소 칸과 같은 주소
 
 
 def _day(req: dict) -> date:

@@ -79,7 +79,7 @@ def test_call_fills_dashboard_agency_request_and_forms(calls):
     rid = client.post("/vapi/webhook", json=body).json()["id"]
     req = client.get(f"/api/requests/{rid}").json()
     want = "강원특별자치도 홍천군 서석면 수하길 12 (수하리마을회관) 앞"
-    assert req["facts"]["place"]["addr"] == want and req["facts"]["place"]["url"] == "https://place.map.kakao.com/1"
+    assert req["facts"]["place"]["value"] == want and req["facts"]["place"]["url"] == "https://place.map.kakao.com/1"
     assert {a["fields"].get("상세 주소") for a in req["applications"]} == {want}
     word = Document(io.BytesIO(client.get(f"/api/requests/{rid}/forms/integrated.docx").content))
     assert want in "\n".join(c.text for row in word.tables[0].rows for c in row.cells)

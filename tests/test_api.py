@@ -307,7 +307,7 @@ def test_wheelchair_means_special_transport():
     rid = client.post("/vapi/webhook", json=report(structured)).json()["id"]
     f = client.get(f"/api/requests/{rid}").json()["facts"]
     assert f["transport"]["value"] == "특별교통수단" and f["time"]["value"] == "10:00"
-    assert f["place"] == {"value": "서석면 풍암리", "sub": "마을회관 앞", "level": "ok", "why": None}
+    assert f["place"] == {"value": "강원특별자치도 홍천군 서석면 풍암리 (마을회관 앞)", "sub": "", "level": "ok", "why": None}
 
 
 def test_official_forms_as_word():
