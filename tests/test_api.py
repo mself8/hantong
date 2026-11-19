@@ -214,3 +214,13 @@ def test_view_page_shows_forms_and_message():
     assert "병원동행 신청서" in html and "어르신께 보낼 안내문" in html
     assert "동행 매니저가 9시에 찾아갑니다.&lt;b&gt;" in html  # 값은 이스케이프해서 보여 준다
     assert client.get("/").status_code == 200
+
+
+def test_voice_card_call_is_tagged_and_not_linked_to_roster():
+    body = report()
+    body["message"]["call"] = {"id": "web-v01", "type": "webCall", "assistantOverrides": {"metadata": {"card": "V01"}}}
+    rid = client.post("/vapi/webhook", json=body).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert req["call"]["card"] == "V01" and req["resident"] is None
+    assert len(client.get("/api/voice-cards").json()) == 18
+    assert "V18" in client.get("/call/cards").text

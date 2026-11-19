@@ -82,7 +82,8 @@ def new_request(turns: list[dict], *, source: str, call: dict | None = None,
         "status": "processing",
         "source": source,
         "call": {**(call or {}), "caller": mask_phone(caller)},
-        "resident": find_resident(caller),
+        # 음성 시험 카드로 건 통화는 명부와 잇지 않는다(말한 마을만 채점하려고)
+        "resident": None if (call or {}).get("card") else find_resident(caller),
         "transcript": turns,
         "intent": None,
         "summary": None,
@@ -234,6 +235,8 @@ def parse_vapi_report(msg: dict) -> tuple[list[dict], dict, str | None]:
         "ended_at": msg.get("endedAt") or call.get("endedAt"),
         "ended_reason": msg.get("endedReason"),
         "recording_url": artifact.get("recordingUrl") or msg.get("recordingUrl"),
+        # 시험 통화 페이지(/call?card=V01)가 붙여 보낸 카드 번호
+        "card": ((call.get("assistantOverrides") or {}).get("metadata") or call.get("metadata") or {}).get("card"),
     }
     caller = (call.get("customer") or {}).get("number") or (msg.get("customer") or {}).get("number")
     return turns, info, caller

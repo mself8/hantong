@@ -139,3 +139,8 @@ def residents() -> list[dict]:
 def holidays() -> dict[str, str]:
     """날짜(YYYY-MM-DD) -> 공휴일 이름."""
     return {r["날짜"]: r["명칭"] for r in _rows(DATA / "public/공휴일_2026_2027.csv")}
+
+
+def voice_cards() -> list[dict]:
+    """음성 시험 카드 18장(다연 v1 04_음성 + 정답 병원). 시험 통화 페이지와 채점에 쓴다."""
+    return _rows(DATA / "synthetic/voice_cards_v1.csv")

@@ -39,7 +39,7 @@
 
   <div id="status" aria-live="polite">준비 중이에요…</div>
 
-  <div class="card">
+  <div class="card" id="script">
     <b>이렇게 말해 보세요</b>
     "다음 주 화요일에 읍내 정형외과 가야 하는데, 혼자는 못 가겠어요."
   </div>
@@ -49,6 +49,22 @@
 
 <script type="module">
   const cfg = window.HANTONG || {};
+  const cardId = new URLSearchParams(location.search).get("card");
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  if (cardId) {
+    try {
+      const cards = await (await fetch("/api/voice-cards")).json();
+      const c = cards.find((x) => x.call_id === cardId);
+      if (c) {
+        const go = {yes: "같이 가 줄 사람이 필요하다고 말해요", no: "혼자 갈 수 있다고 말해요", unknown: "동행 얘기는 먼저 꺼내지 않아요(물으면 잘 모르겠다고)"}[c.동행] || c.동행;
+        const rows = [["말하는 방식", c.말하는_방식], ["병원", c.병원표현], ["날짜", c.날짜표현], ["시간", c.도착희망시각],
+          ["동행", go], ["사는 마을", c.출발마을 === "모름" ? "물어도 모른다고 해요" : c.출발마을], ["특별 지시", c.특별지시],
+          ["말투 예", c.말투 ? "~" + c.말투 : ""], ["딴 얘기", c.딴얘기]].filter(([, v]) => v);
+        document.getElementById("script").innerHTML = `<b>시험 카드 ${esc(c.call_id)} · 어르신 역할로 말해 주세요</b>` +
+          rows.map(([k, v]) => `<div><span style="color:#5b6475">${esc(k)}</span> · ${esc(v)}</div>`).join("");
+      }
+    } catch (e) { console.error(e); }
+  }
   const btn = document.getElementById("btn");
   const label = document.getElementById("label");
   const statusEl = document.getElementById("status");
@@ -87,7 +103,7 @@
       btn.disabled = true;
       say("연결하는 중이에요…");
       try {
-        await vapi.start(cfg.assistantId);
+        await vapi.start(cfg.assistantId, cardId ? { metadata: { card: cardId } } : undefined);
       } catch (e) {
         console.error(e);
         btn.disabled = false;

@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import pipeline, store, view
-from .data import hospitals, villages
+from .data import hospitals, villages, voice_cards
 
 load_dotenv()  # 로컬에서만 .env를 읽는다. Railway는 환경변수를 직접 넣는다.
 
@@ -187,6 +187,29 @@ def call_page() -> str:
            "assistantId": os.getenv("VAPI_ASSISTANT_ID", DEFAULT_ASSISTANT)}
     script = f"<script>window.HANTONG = {json.dumps(cfg)};</script>"
     return CALL_PAGE.read_text(encoding="utf-8").replace("</head>", script + "\n</head>", 1)
+
+
+@app.get("/api/voice-cards")
+def list_voice_cards() -> list[dict]:
+    return voice_cards()
+
+
+@app.get("/call/cards", response_class=HTMLResponse)
+def voice_card_list() -> str:
+    """팀원 음성 시험용 카드 목록. 카드를 누르면 그 카드 대본이 보이는 통화 페이지로 간다."""
+    from html import escape
+    rows = "".join(
+        f"<a class='c' href='/call?card={escape(c['call_id'])}'><b>{escape(c['call_id'])}</b>"
+        f"<span>{escape(c['말하는_방식'])}</span><span>{escape(c['병원표현'])} · {escape(c['날짜표현'])}</span></a>"
+        for c in voice_cards())
+    return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'><title>음성 시험 카드</title>"
+            "<style>body{margin:0;background:#f6f4ef;color:#1d2433;font-family:'Noto Sans KR','Apple SD Gothic Neo',sans-serif}"
+            "main{max-width:480px;margin:0 auto;padding:24px 16px}h1{font-size:22px;margin:0 0 6px}p{color:#5b6475;margin:0 0 16px}"
+            ".c{display:grid;grid-template-columns:48px 1fr;gap:2px 10px;background:#fff;border:1px solid #e3dfd6;border-radius:12px;"
+            "padding:12px 14px;margin-bottom:8px;color:inherit;text-decoration:none}.c b{grid-row:span 2;font-size:18px}"
+            ".c span:last-child{color:#5b6475;font-size:14px}</style></head><body><main><h1>음성 시험 카드 18장</h1>"
+            "<p>한 사람이 카드 한 장씩 맡아 통화해 주세요. 카드를 누르면 대본이 보여요.</p>" + rows + "</main></body></html>")
 
 
 @app.get("/view", response_class=HTMLResponse)
