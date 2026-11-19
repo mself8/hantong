@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import os
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from pydantic import BaseModel
 from . import pipeline, store, view
 from .data import hospitals, villages, voice_cards
 
+mimetypes.add_type("font/woff2", ".woff2")  # 글꼴 파일을 글꼴 형식으로 내보낸다
 load_dotenv()  # 로컬에서만 .env를 읽는다. Railway는 환경변수를 직접 넣는다.
 
 app = FastAPI(title="한 통이면 돼유")
