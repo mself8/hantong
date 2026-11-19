@@ -178,6 +178,7 @@ def fill(req: dict, ex, today: date) -> dict:
                    "point": ex.address_detail or (resident.get("pickup_point") if same_as_roster else None)},
         "mobility": ex.mobility or (resident.get("mobility") if resident else None),
         "wheelchair_needed": ex.wheelchair_needed,
+        "bus_ok": ex.bus_ok,
         "evidence": {"hospital": ex.evidence_hospital, "date": ex.evidence_date,
                      "companion": ex.evidence_companion, "village": ex.evidence_village},
     })

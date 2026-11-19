@@ -29,6 +29,8 @@ class Extraction(BaseModel):
     companion_needed: Literal["yes", "no", "unknown"] = Field(
         description="같이 가 줄 사람이 필요하다고 했으면 yes, 혼자 갈 수 있다고 했으면 no, 말이 없으면 unknown")
     companion_reason: Optional[str] = Field(description="동행이 필요한 이유를 어르신 말로. 예: '무릎이 아파서'")
+    bus_ok: Literal["yes", "no", "unknown"] = Field(
+        default="unknown", description="병원까지 버스를 타고 가실 수 있다고 했으면 yes, 어렵다고 했으면 no, 말이 없으면 unknown")
     wheelchair_needed: Literal["yes", "no", "unknown"] = Field(
         description="휠체어를 타야 하거나 휠체어 차량이 필요하다고 했으면 yes, 아니라고 했으면 no, 말이 없으면 unknown")
     village: Optional[str] = Field(description="어르신이 사는 마을(리) 표현 그대로. 예: '수하리'")
@@ -65,7 +67,7 @@ def from_dict(d: dict) -> Extraction:
     날짜 형식이 아닌 날짜는 기본값으로 둔다. 그래야 값 하나 때문에 신청서 전체가 실패하지 않는다.
     """
     base = {k: None for k in Extraction.model_fields}
-    base.update(intent="other", companion_needed="unknown", wheelchair_needed="unknown", summary="")
+    base.update(intent="other", companion_needed="unknown", wheelchair_needed="unknown", bus_ok="unknown", summary="")
     for k, v in (d or {}).items():
         if k not in Extraction.model_fields or v is None:
             continue

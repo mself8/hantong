@@ -95,3 +95,10 @@ def test_rules_found_by_eval_set():
     assert r["status"] == "candidates" and set(names(r)) == {"한림대학교춘천성심병원", "강원대학교병원"}
     r = match_hospital("병원 이름은 잘 모르고 가정의학과에 가야 해요")
     assert r["basis"] in ("department", None) and not any("사단" in n for n in names(r))
+
+
+def test_village_written_as_it_sounds():
+    from app.normalize import match_village, sounds
+    assert sounds("결운리") == "겨룬리" and sounds("좋아") == "조아"
+    assert match_village("겨룬리에 살고 있어").label == "홍천읍 결운리"   # 음성 인식이 소리 나는 대로 적은 경우
+    assert match_village("수하리").label == "서석면 수하리"                # 글자로 맞는 건 그대로

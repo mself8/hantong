@@ -333,3 +333,13 @@ def test_dialect_endings_are_not_part_of_the_name():
     rid = client.post("/vapi/webhook", json=report(dict(FIELDS, caller_name="한옥순이에"))).json()["id"]
     req = client.get(f"/api/requests/{rid}").json()
     assert req["display_name"] == "한옥순" and not any(c["type"] == "name_mismatch" for c in req["checks"])
+
+
+def test_bus_answer_decides_transport():
+    def facts_for(**kw):
+        rid = client.post("/vapi/webhook", json=report(dict(FIELDS, village="풍암리", wheelchair_needed="no", **kw))).json()["id"]
+        return client.get(f"/api/requests/{rid}").json()["facts"]["transport"]
+    assert facts_for(bus_ok="yes")["value"] == "농어촌버스" and facts_for(bus_ok="yes")["level"] == "ok"
+    assert facts_for(bus_ok="no")["value"] == "교통편 확인 필요"            # 풍암리는 희망택시 마을이 아니다
+    unknown = facts_for(bus_ok="unknown")
+    assert unknown["value"] == "농어촌버스" and unknown["why"] == "버스를 타실 수 있는지 듣지 못했어요"

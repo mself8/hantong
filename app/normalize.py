@@ -277,6 +277,27 @@ def match_hospital(query: str | None, dept: str | None = None, home_town: str | 
 
 # ── 마을 ───────────────────────────────────────────────
 
+# 받침 → 다음 글자 첫소리(홑받침만). ㅎ 받침은 'ㅇ' 앞에서 소리가 사라진다(-1).
+_JONG_TO_CHO = {1: 0, 2: 1, 4: 2, 7: 3, 8: 5, 16: 6, 17: 7, 19: 9, 20: 10, 22: 12, 23: 14, 24: 15, 25: 16, 26: 17, 27: -1}
+
+
+def sounds(s: str) -> str:
+    """받침이 'ㅇ'으로 시작하는 다음 글자로 넘어가는 소리(연음)로 바꾼다. '결운리' → '겨룬리'.
+    어르신이 말한 마을 이름을 음성 인식이 소리 나는 대로 적은 경우를 맞추려고 쓴다."""
+    out = list(s)
+    for i in range(len(out) - 1):
+        a, b = ord(out[i]) - 0xAC00, ord(out[i + 1]) - 0xAC00
+        if not (0 <= a < 11172 and 0 <= b < 11172) or b // 588 != 11:
+            continue
+        cho = _JONG_TO_CHO.get(a % 28)
+        if cho is None:
+            continue
+        out[i] = chr(0xAC00 + a - a % 28)
+        if cho >= 0:
+            out[i + 1] = chr(0xAC00 + cho * 588 + b % 588)
+    return "".join(out)
+
+
 def match_village(text: str | None) -> Village | None:
     """'수하 사는데', '서석면 수하리' 같은 표현에서 리를 찾는다."""
     s = re.sub(r"\s+", "", text or "")
@@ -299,4 +320,9 @@ def match_village(text: str | None) -> Village | None:
         if len(core) >= 2 and core in t:
             if best is None or len(core) > len(best.name.removesuffix("리")):
                 best = v
-    return best
+    if best:
+        return best
+    # 3) 소리 나는 대로 적은 경우('결운리'를 '겨룬리'로). 글자로 못 찾았을 때만.
+    st = sounds(t)
+    heard = [v for v in vs if len(v.name.removesuffix("리")) >= 2 and sounds(v.name.removesuffix("리")) in st]
+    return max(heard, key=lambda v: len(v.name)) if heard else None

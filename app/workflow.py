@@ -75,15 +75,19 @@ def _transport(req: dict, why_place: str | None) -> dict:
         reg = {True: "등록됨", False: "미등록이라 등록 필요"}.get(res.get("special_transport"), "등록 여부 확인")
         return {"value": "특별교통수단", "sub": f"휠체어 차량 · {reg}", "level": "ok"}
     card = {True: "교통복지카드 있음(월 20회 무료)", False: "교통복지카드 없음"}.get(res.get("bus_card"), "교통복지카드 확인")
-    if not p.get("village"):
-        return {"value": "농어촌버스", "sub": card, "level": "check", "why": "사는 곳을 몰라 교통수단을 정하지 못했어요"}
-    roster = why_place
-    taxi = _hope_taxi_match(p["village"])
-    if taxi:
+    bus = req.get("bus_ok") or "unknown"
+    taxi = _hope_taxi_match(p.get("village"))
+    if taxi and bus != "yes":                      # 버스가 어렵거나 못 들었으면, 희망택시가 다니는 마을이니 희망택시
         town = taxi["읍면"]
         return {"value": "희망택시", "sub": "읍내 병원까지" if town == "홍천읍" else f"{town} 소재지까지, 이후 버스",
-                "level": "check" if roster else "ok", "why": roster}
-    return {"value": "농어촌버스", "sub": card, "level": "check" if roster else "ok", "why": roster}
+                "level": "check" if why_place else "ok", "why": why_place}
+    if bus == "no":
+        return {"value": "교통편 확인 필요", "sub": "버스를 타기 어렵다고 하셨어요", "level": "check",
+                "why": "희망택시가 다니지 않는 마을이라 다른 교통편을 알아봐야 해요"}
+    if not p.get("village"):
+        return {"value": "농어촌버스", "sub": card, "level": "check", "why": "사는 곳을 몰라 교통수단을 정하지 못했어요"}
+    why = why_place or (None if bus == "yes" else "버스를 타실 수 있는지 듣지 못했어요")
+    return {"value": "농어촌버스", "sub": card + (" · 희망택시도 다니는 마을" if taxi else ""), "level": "check" if why else "ok", "why": why}
 
 
 def facts(req: dict) -> dict:
