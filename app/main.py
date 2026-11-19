@@ -10,7 +10,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
+from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -223,6 +224,18 @@ def voice_card_list() -> str:
             "padding:12px 14px;margin-bottom:8px;color:inherit;text-decoration:none}.c b{grid-row:span 2;font-size:18px}"
             ".c span:last-child{color:#5b6475;font-size:14px}</style></head><body><main><h1>음성 시험 카드 18장</h1>"
             "<p>한 사람이 카드 한 장씩 맡아 통화해 주세요. 카드를 누르면 대본이 보여요.</p>" + rows + "</main></body></html>")
+
+
+@app.get("/api/requests/{rid}/forms.pdf")
+def application_bundle(rid: str) -> Response:
+    """통합지원 신청서 + 기관별 신청서(+ 필요하면 특별교통수단 등록 신청서)를 값을 채운 PDF 한 묶음으로 내려준다."""
+    from . import pdfforms
+    req = store.get(rid)
+    if not req:
+        raise HTTPException(status_code=404, detail="없는 신청서")
+    name = f"신청서_{rid}.pdf"
+    return Response(pdfforms.bundle(req), media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename=\"forms_{rid}.pdf\"; filename*=UTF-8''{quote(name)}"})
 
 
 @app.get("/forms/{rid}/{aid}", response_class=HTMLResponse)

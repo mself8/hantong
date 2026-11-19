@@ -243,3 +243,16 @@ def test_application_form_page():
     html = client.get(f"/forms/{rid}/A1").text
     assert "병원동행 신청서" in html and "제출처" in html and "인쇄하기" in html
     assert client.get(f"/forms/{rid}/A9").status_code == 404
+
+
+def test_pdf_bundle_has_official_forms():
+    import fitz
+    body = report(dict(FIELDS, wheelchair_needed="yes"))
+    rid = client.post("/vapi/webhook", json=body).json()["id"]
+    r = client.get(f"/api/requests/{rid}/forms.pdf")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
+    doc = fitz.open(stream=r.content, filetype="pdf")
+    text = "".join(p.get_text() for p in doc)
+    # 통합지원 신청서 2쪽 + 기관 신청서 2장(병원동행, 특별교통수단) + 미등록이라 등록 신청서 4쪽
+    assert doc.page_count == 8, doc.page_count
+    assert "통합지원" in text and "한○○" in text and "등록 신청서" in text

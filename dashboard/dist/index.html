@@ -192,7 +192,14 @@ async function act(path, body, method, done) {
     editing = false; editMsg = false;
     if (done) toast(done);
     await loadList(); renderDetail();
-  } catch (e) { toast(e.message); }
+    return true;
+  } catch (e) { toast(e.message); return false; }
+}
+// 값을 채운 신청서 묶음(통합지원 신청서 + 기관별 신청서) PDF를 내려받는다
+function download(id) {
+  const a = document.createElement("a");
+  a.href = `/api/requests/${encodeURIComponent(id)}/forms.pdf`; a.download = "";
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 let listSig = "";
@@ -277,7 +284,8 @@ function renderDetail() {
       <div class="more"><a class="linkbtn" href="/forms/${encodeURIComponent(r.id)}/${encodeURIComponent(a.id)}" target="_blank" rel="noopener">신청서 양식으로 보기 · 인쇄 ↗</a></div>
       ${rest ? `<details class="more"><summary>신청서 전체 칸 보기</summary><dl class="kv">${rest}</dl></details>` : ""}${resp}</article>`;
   }).join("");
-  const appsPart = `<section class="part"><h3>기관별 신청서 <span class="cnt">${(r.applications || []).length}장</span></h3>
+  const appsPart = `<section class="part"><h3>기관별 신청서 <span class="cnt">${(r.applications || []).length}장</span>
+      <button class="btn" style="margin-left:auto;height:38px;font-size:15px" data-act="pdf">신청서 PDF 내려받기</button></h3>
     ${apps ? `<div class="apps">${apps}</div>` : `<p class="note">기관에 낼 신청서가 없는 건이에요.</p>`}</section>`;
 
   const m = r.message;
@@ -317,7 +325,8 @@ document.addEventListener("click", (e) => {
   if (!current) return;
   const base = `/api/requests/${encodeURIComponent(current.id)}`;
   switch (t.dataset.act) {
-    case "submit": act(`${base}/submit`, null, "POST", "신청서를 제출했어요"); break;
+    case "submit": { const id = current.id; act(`${base}/submit`, null, "POST", "신청서를 제출했어요 · PDF를 내려받아요").then((ok) => ok && download(id)); break; }
+    case "pdf": download(current.id); break;
     case "send": act(`${base}/message/send`, null, "POST", "안내 문자를 보냈어요 (시연: 발송 기록)"); break;
     case "editmsg": editMsg = true; renderDetail(); break;
     case "cancelmsg": editMsg = false; renderDetail(); break;
