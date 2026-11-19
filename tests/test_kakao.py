@@ -67,6 +67,20 @@ def test_two_halls_in_one_village_need_a_check(calls, monkeypatch):
     assert kakao.find_pickup("풍암2리 마을회관", pung)["alts"] == []  # 몇 리인지 말하면 확인할 필요 없다
 
 
+def test_roster_pickup_point_is_not_the_home_address(calls, monkeypatch):
+    """명부의 승차 지점(풍암리 마을회관)은 모시러 갈 곳일 뿐, 어르신이 사는 주소가 아니다."""
+    hall = {**HALL, "place_name": "풍암리마을회관", "address_name": "강원특별자치도 홍천군 서석면 풍암리 1",
+            "road_address_name": "강원특별자치도 홍천군 서석면 풍암로 1"}
+    monkeypatch.setattr(kakao, "_search", lambda params: [hall])
+    body = report(dict(FIELDS, village="풍암리", address_detail=None, wheelchair_needed="yes"))
+    req = client.get(f"/api/requests/{client.post('/vapi/webhook', json=body).json()['id']}").json()
+    assert req["pickup"]["point"] == "풍암리 마을회관" and req["pickup"]["map"]["name"] == "풍암리마을회관"
+    assert req["facts"]["place"]["value"] == "강원특별자치도 홍천군 서석면 풍암리" and "url" not in req["facts"]["place"]
+    special = next(a for a in req["applications"] if a["type"] == "special_transport")
+    assert special["fields"]["출발지"] == "강원특별자치도 홍천군 서석면 풍암로 1 (풍암리마을회관)"
+    assert special["fields"]["상세 주소"] == "확인 필요"
+
+
 def test_not_found_tries_nearest_then_gives_up(calls):
     assert kakao.find_pickup("한림대학교 후문 앞", SUHA) is None
     assert [c.get("sort") for c in calls] == [None, "distance"]

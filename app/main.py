@@ -141,6 +141,11 @@ def _tidy_saved_requests() -> None:
             req["caller_name"] = pipeline.clean_name(req["caller_name"])
             for c in req.get("checks") or []:
                 c["message"] = re.sub(r"성함\(([^)]+)\)", lambda m: f"성함({pipeline.clean_name(m.group(1))})", c["message"])
+        p = req.get("pickup") or {}
+        if p.get("map") and not p.get("detail"):  # 명부 승차 지점으로 찾은 마을회관은 사는 곳이 아니다(상세 주소 칸에서 뺀다)
+            for a in req.get("applications") or []:
+                if a["fields"].get("상세 주소") == workflow.pickup_address(p):
+                    a["fields"]["상세 주소"] = "확인 필요"
         if json.dumps(req, ensure_ascii=False) != before:
             store.save(req)
 
@@ -163,8 +168,8 @@ def _fill_saved_maps() -> None:
             continue
         p["map"] = found
         addr = workflow.pickup_address(p)
-        for a in req.get("applications") or []:  # 기관에 보낼 신청서의 주소 칸도 실제 주소로
-            for k in ("상세 주소", "승차 지점", "출발지"):
+        for a in req.get("applications") or []:  # 기관에 보낼 신청서의 주소 칸도 실제 주소로(상세 주소는 어르신이 말한 곳만)
+            for k in ("승차 지점", "출발지") + (("상세 주소",) if p.get("detail") else ()):
                 if k in a["fields"]:
                     a["fields"][k] = addr
         store.save(req)
