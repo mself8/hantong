@@ -19,7 +19,8 @@ load_dotenv()  # 로컬에서만 .env를 읽는다. Railway는 환경변수를 �
 app = FastAPI(title="한 통이면 돼유")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-STATUSES = {"processing": "정리 중", "pending": "확인 대기", "approved": "승인", "held": "보류"}
+STATUSES = {"processing": "정리 중", "pending": "확인 대기", "submitted": "기관 회신 대기",
+            "confirmed": "안내 대기", "notified": "안내 완료", "held": "보류"}
 
 
 @app.get("/health")
@@ -42,7 +43,8 @@ async def vapi_webhook(request: Request, bg: BackgroundTasks,
     turns, call, caller = pipeline.parse_vapi_report(msg)
     if not any(t["role"] == "elder" for t in turns):
         return {"ok": True, "skipped": "어르신 말이 없는 통화"}
-    req = pipeline.new_request(turns, source="phone", call=call, caller=caller)
+    req = pipeline.new_request(turns, source="phone", call=call, caller=caller,
+                               prefill=pipeline.vapi_structured(msg))
     bg.add_task(pipeline.process, req["id"])
     return {"ok": True, "id": req["id"]}
 
@@ -81,12 +83,66 @@ def get_request(rid: str) -> dict:
     return req
 
 
-@app.post("/api/requests/{rid}/approve")
-def approve(rid: str, body: DecisionIn | None = None) -> dict:
-    req = pipeline.decide(rid, "approved", body.memo if body else "")
-    if not req:
-        raise HTTPException(status_code=404, detail="없는 신청서")
-    return req
+class HospitalIn(BaseModel):
+    hosp_id: str
+
+
+class FieldsIn(BaseModel):
+    fields: dict
+
+
+class RespondIn(BaseModel):
+    result: str  # confirmed | rejected
+    detail: str = ""
+
+
+class MessageIn(BaseModel):
+    text: str
+
+
+def _run(fn, *args):
+    try:
+        return fn(*args)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=f"찾을 수 없어요: {e}")
+    except pipeline.FlowError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@app.post("/api/requests/{rid}/hospital")
+def choose_hospital(rid: str, body: HospitalIn) -> dict:
+    return _run(pipeline.choose_hospital, rid, body.hosp_id)
+
+
+@app.put("/api/requests/{rid}/applications/{aid}")
+def edit_application(rid: str, aid: str, body: FieldsIn) -> dict:
+    return _run(pipeline.edit_application, rid, aid, body.fields)
+
+
+@app.post("/api/requests/{rid}/applications/{aid}/submit")
+def submit_application(rid: str, aid: str) -> dict:
+    return _run(pipeline.submit_application, rid, aid)
+
+
+@app.post("/api/requests/{rid}/submit")
+def submit_all(rid: str) -> dict:
+    """작성된 기관별 신청서를 한 번에 제출한다."""
+    return _run(pipeline.submit_application, rid, None)
+
+
+@app.post("/api/requests/{rid}/applications/{aid}/respond")
+def respond_application(rid: str, aid: str, body: RespondIn) -> dict:
+    return _run(pipeline.respond_application, rid, aid, body.result, body.detail)
+
+
+@app.put("/api/requests/{rid}/message")
+def edit_message(rid: str, body: MessageIn) -> dict:
+    return _run(pipeline.edit_message, rid, body.text)
+
+
+@app.post("/api/requests/{rid}/message/send")
+def send_message(rid: str) -> dict:
+    return _run(pipeline.send_message, rid)
 
 
 @app.post("/api/requests/{rid}/hold")

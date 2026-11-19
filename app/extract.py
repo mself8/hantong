@@ -28,6 +28,8 @@ class Extraction(BaseModel):
     companion_needed: Literal["yes", "no", "unknown"] = Field(
         description="같이 가 줄 사람이 필요하다고 했으면 yes, 혼자 갈 수 있다고 했으면 no, 말이 없으면 unknown")
     companion_reason: Optional[str] = Field(description="동행이 필요한 이유를 어르신 말로. 예: '무릎이 아파서'")
+    wheelchair_needed: Literal["yes", "no", "unknown"] = Field(
+        description="휠체어를 타야 하거나 휠체어 차량이 필요하다고 했으면 yes, 아니라고 했으면 no, 말이 없으면 unknown")
     village: Optional[str] = Field(description="어르신이 사는 마을(리) 표현 그대로. 예: '수하리'")
     mobility: Optional[str] = Field(description="거동 상태를 말했으면 그대로. 예: '지팡이 짚어요'")
     evidence_hospital: Optional[str] = Field(description="병원 값의 근거가 된 어르신 말 원문 조각")
@@ -47,6 +49,14 @@ SYSTEM = """너는 강원 홍천군 어르신의 '병원 가는 날' 신청 전�
 - 날짜는 아래 통화일 기준으로 계산한다. '다음 주 화요일'은 통화일이 속한 주의 다음 주 화요일이다.
 - evidence_* 에는 그 값을 뽑은 근거가 된 어르신 말을 통화 기록에서 그대로 짧게 옮긴다.
 - 진단, 처방, 지원 자격 판단은 하지 않는다."""
+
+
+def from_dict(d: dict) -> Extraction:
+    """Vapi 구조화 출력처럼 일부 칸이 빠진 결과를 Extraction으로 맞춘다."""
+    base = {k: None for k in Extraction.model_fields}
+    base.update(intent="other", companion_needed="unknown", wheelchair_needed="unknown", summary="")
+    base.update({k: v for k, v in (d or {}).items() if k in Extraction.model_fields and v is not None})
+    return Extraction.model_validate(base)
 
 
 def format_transcript(turns: list[dict]) -> str:
