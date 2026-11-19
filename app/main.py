@@ -135,8 +135,11 @@ def _tidy_saved_requests() -> None:
         for t in req.get("transcript") or []:
             if t.get("role") == "ai":
                 t["text"] = live.fix_name(t["text"])
-        if req.get("caller_name"):  # '서영재이'처럼 말끝이 붙어 저장된 성함
-            req["caller_name"] = pipeline.clean_name(req["caller_name"])
+        old_name = req.get("caller_name")
+        if old_name:  # '서영재이'처럼 말끝이 붙어 저장된 성함 (점검 문장 속 성함도 같이)
+            req["caller_name"] = pipeline.clean_name(old_name)
+            for c in req.get("checks") or []:
+                c["message"] = c["message"].replace(f"({old_name})", f"({req['caller_name']})")
         if json.dumps(req, ensure_ascii=False) != before:
             store.save(req)
 
