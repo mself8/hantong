@@ -129,34 +129,48 @@
     try { const mod = await import("https://esm.sh/@vapi-ai/web@3.1.0"); Vapi = mod.default?.default ?? mod.default; }
     catch (e) { const mod = await import("https://cdn.jsdelivr.net/npm/@vapi-ai/web@3.1.0/+esm"); Vapi = mod.default?.default ?? mod.default; }
     const vapi = new Vapi(cfg.publicKey);
+    let state = "idle", cancelled = false;  // idle → calling(신호음) → live(통화 중) → ended
 
-    vapi.on("call-start", () => {
-      ring(false); live = true; started = Date.now(); setState("live"); btn.disabled = false;
-      status.textContent = "통화 중 00:00"; hint.textContent = "편하게 말씀하세요";
-      timer = setInterval(() => { status.textContent = "통화 중 " + mmss(Math.floor((Date.now() - started) / 1000)); }, 500);
-    });
-    vapi.on("speech-start", () => { avatar.classList.add("talking"); hint.textContent = "상담원이 말하는 중이에요"; });
-    vapi.on("speech-end", () => { avatar.classList.remove("talking"); if (live) hint.textContent = "편하게 말씀하세요"; });
     const ended = (msg) => {
+      if (state === "ended") return;  // 버튼과 'call-end' 알림이 겹쳐도 한 번만 처리
       ring(false); clearInterval(timer);
       const dur = started ? mmss(Math.floor((Date.now() - started) / 1000)) : null;
-      live = false; started = 0; setState("ended"); btn.disabled = false;
+      live = false; started = 0; state = "ended"; setState("ended"); btn.disabled = false;
       status.textContent = dur ? `통화 종료 · ${dur}` : "통화 종료";
       hint.textContent = msg;
     };
-    vapi.on("call-end", () => ended("신청이 담당 공무원 화면에 올라갔어요"));
-    vapi.on("error", (e) => { console.error(e); ended("연결에 문제가 생겼어요. 다시 걸어 주세요."); });
+    vapi.on("call-start", () => {
+      if (cancelled) { try { vapi.end(); } catch (e) {} return; }  // 신호음 중에 취소했는데 뒤늦게 연결되면 바로 끊는다
+      ring(false); live = true; state = "live"; started = Date.now(); setState("live"); btn.disabled = false;
+      status.textContent = "통화 중 00:00"; hint.textContent = "편하게 말씀하세요";
+      timer = setInterval(() => { status.textContent = "통화 중 " + mmss(Math.floor((Date.now() - started) / 1000)); }, 500);
+    });
+    vapi.on("speech-start", () => { if (state === "live") { avatar.classList.add("talking"); hint.textContent = "상담원이 말하는 중이에요"; } });
+    vapi.on("speech-end", () => { avatar.classList.remove("talking"); if (state === "live") hint.textContent = "편하게 말씀하세요"; });
+    vapi.on("call-end", () => { if (state === "live" || state === "calling") ended("신청이 담당 공무원 화면에 올라갔어요"); });
+    vapi.on("error", (e) => { console.error(e); if (state !== "ended") ended("연결에 문제가 생겼어요. 다시 걸어 주세요."); });
 
     mute.addEventListener("click", () => {
       const on = !vapi.isMuted(); vapi.setMuted(on);
       mute.classList.toggle("active", on); mute.setAttribute("aria-pressed", String(on));
     });
     btn.addEventListener("click", async () => {
-      if (live || ringTimer) { btn.disabled = true; ring(false); await vapi.stop(); return; }
-      btn.disabled = true; setState("calling"); status.textContent = "전화 거는 중…"; hint.textContent = "";
-      ring(true); btn.disabled = false;
+      if (state === "live") {  // 통화 끝내기: 상담원 쪽까지 끊고(end) 화면도 바로 바꾼다
+        try { vapi.end(); } catch (e) { console.error(e); }
+        ended("신청이 담당 공무원 화면에 올라갔어요");
+        return;
+      }
+      if (state === "calling") {  // 신호음 중 취소
+        cancelled = true;
+        try { await vapi.stop(); } catch (e) { console.error(e); }
+        ended("전화를 취소했어요");
+        return;
+      }
+      cancelled = false; state = "calling"; setState("calling");
+      status.textContent = "전화 거는 중…"; hint.textContent = ""; mute.classList.remove("active");
+      ring(true);
       try { await vapi.start(cfg.assistantId, cardId ? { metadata: { card: cardId } } : undefined); }
-      catch (e) { console.error(e); ended("마이크를 허용했는지 확인하고 다시 걸어 주세요."); }
+      catch (e) { console.error(e); if (!cancelled) ended("마이크를 허용했는지 확인하고 다시 걸어 주세요."); }
     });
     btn.disabled = false;
     setState("idle");
