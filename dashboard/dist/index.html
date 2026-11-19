@@ -207,7 +207,7 @@ const TABS = [["pending", "확인 대기"], ["submitted", "기관 회신 대기"
 const APP_STATUS = { draft: "요청 전", submitted: "요청함", confirmed: "확정", rejected: "불가" };
 const KEY_FIELDS = { companion: ["진료일", "병원", "요금"], hope_taxi: ["운행일", "승차 지점", "목적지", "요금"], special_transport: ["진료일", "교통약자 등록", "요금"] };
 
-let items = [], tab = "pending", selected = null, current = null, editing = false, editMsg = false;
+let items = [], tab = "all", selected = null, current = null, editing = false, editMsg = false;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const hhmm = (iso) => (iso || "").slice(11, 16);
