@@ -32,6 +32,8 @@ class Extraction(BaseModel):
     wheelchair_needed: Literal["yes", "no", "unknown"] = Field(
         description="휠체어를 타야 하거나 휠체어 차량이 필요하다고 했으면 yes, 아니라고 했으면 no, 말이 없으면 unknown")
     village: Optional[str] = Field(description="어르신이 사는 마을(리) 표현 그대로. 예: '수하리'")
+    address_detail: Optional[str] = Field(
+        default=None, description="번지·집 위치·가까운 건물 등 사는 곳의 자세한 설명. 예: '수하리 마을회관 옆 파란 지붕 집'")
     mobility: Optional[str] = Field(description="거동 상태를 말했으면 그대로. 예: '지팡이 짚어요'")
     evidence_hospital: Optional[str] = Field(description="병원 값의 근거가 된 어르신 말 원문 조각")
     evidence_date: Optional[str] = Field(description="날짜 값의 근거가 된 어르신 말 원문 조각")

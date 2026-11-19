@@ -125,7 +125,9 @@ def fill(req: dict, ex, today: date) -> dict:
         "companion": {"needed": ex.companion_needed, "reason": ex.companion_reason},
         "pickup": {"village_expr": ex.village, "village": village.label if village else None,
                    "village_code": village.code if village else None,
-                   "point": resident.get("pickup_point") if same_as_roster else None},
+                   "detail": ex.address_detail,
+                   # 통화에서 들은 자세한 위치가 있으면 그곳, 없으면 명부의 승차 지점(같은 마을일 때만)
+                   "point": ex.address_detail or (resident.get("pickup_point") if same_as_roster else None)},
         "mobility": ex.mobility or (resident.get("mobility") if resident else None),
         "wheelchair_needed": ex.wheelchair_needed,
         "evidence": {"hospital": ex.evidence_hospital, "date": ex.evidence_date,

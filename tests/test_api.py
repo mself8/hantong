@@ -14,7 +14,7 @@ FIELDS = dict(
     intent="hospital_visit", hospital_query="읍내 정형외과", department="정형외과",
     date_expr="담주 화요일", date=None, time_expr=None,
     companion_needed="yes", companion_reason="무릎이 아파서", wheelchair_needed="no",
-    village="수하리", mobility=None,
+    village="수하리", address_detail=None, mobility=None,
     evidence_hospital="읍내 정형외과 가야 되는데", evidence_date="담주 화요일",
     evidence_companion="혼자는 못 가겠드래요", evidence_village="수하리 살아요",
     summary="다음 주 화요일 홍천읍 정형외과, 동행 필요",
@@ -182,3 +182,13 @@ def test_call_page_injects_config_from_env(monkeypatch):
     monkeypatch.setenv("VAPI_PUBLIC_KEY", "pk-test")
     html = client.get("/call").text
     assert '"publicKey": "pk-test"' in html and "e441e44c" in html
+
+
+def test_address_detail_becomes_pickup_point(monkeypatch):
+    monkeypatch.setattr(extract_mod, "extract", lambda turns, today: Extraction(
+        **{**FIELDS, "address_detail": "수하리 마을회관 옆 파란 지붕 집"}))
+    rid = client.post("/vapi/webhook", json=report()).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert req["pickup"]["detail"] == "수하리 마을회관 옆 파란 지붕 집"
+    assert req["pickup"]["point"] == "수하리 마을회관 옆 파란 지붕 집"
+    assert req["applications"][0]["fields"]["상세 주소"] == "수하리 마을회관 옆 파란 지붕 집"

@@ -104,6 +104,7 @@ def build_applications(req: dict) -> list[dict]:
         "나이": f"{resident['age']}세" if resident.get("age") else "확인 필요",
         "연락처": (req.get("call") or {}).get("caller") or "확인 필요",
         "사는 마을": pickup.get("village") or "확인 필요",
+        "상세 주소": pickup.get("detail") or "확인 필요",
         "진료일": _date_label(visit.get("date")),
         "진료 시각": visit.get("time") or "모름",
         "병원": _hospital_label(req),
