@@ -6,8 +6,9 @@ normalize.py와 validate.py의 규칙이 맡는다.
 from __future__ import annotations
 
 import os
+import re
 from datetime import date
-from typing import Literal, Optional
+from typing import Literal, Optional, get_args
 
 from pydantic import BaseModel, Field
 
@@ -51,12 +52,39 @@ SYSTEM = """너는 강원 홍천군 어르신의 '병원 가는 날' 신청 전�
 - 진단, 처방, 지원 자격 판단은 하지 않는다."""
 
 
+EMPTY = {"", "없음", "모름", "null", "none", "n/a", "-"}
+
+
 def from_dict(d: dict) -> Extraction:
-    """Vapi 구조화 출력처럼 일부 칸이 빠진 결과를 Extraction으로 맞춘다."""
+    """Vapi 구조화 출력을 Extraction으로 맞춘다.
+
+    Vapi 화면에서는 선택지를 강제할 수 없어서, 빈칸·'없음'은 비우고 선택지 밖의 값과
+    날짜 형식이 아닌 날짜는 기본값으로 둔다. 그래야 값 하나 때문에 신청서 전체가 실패하지 않는다.
+    """
     base = {k: None for k in Extraction.model_fields}
     base.update(intent="other", companion_needed="unknown", wheelchair_needed="unknown", summary="")
-    base.update({k: v for k, v in (d or {}).items() if k in Extraction.model_fields and v is not None})
+    for k, v in (d or {}).items():
+        if k not in Extraction.model_fields or v is None:
+            continue
+        v = str(v).strip()
+        choices = get_args(Extraction.model_fields[k].annotation)
+        if choices and all(isinstance(c, str) for c in choices):  # 선택지 칸
+            v = v.lower()
+            if v in choices:
+                base[k] = v
+        elif k == "date":
+            base[k] = v if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) and _valid_date(v) else None
+        elif v.lower() not in EMPTY:
+            base[k] = v
     return Extraction.model_validate(base)
+
+
+def _valid_date(v: str) -> bool:
+    try:
+        date.fromisoformat(v)
+        return True
+    except ValueError:
+        return False
 
 
 def format_transcript(turns: list[dict]) -> str:

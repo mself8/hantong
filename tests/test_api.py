@@ -156,3 +156,12 @@ def test_web_call_without_number_uses_demo_resident(monkeypatch):
     req = client.get(f"/api/requests/{rid}").json()
     assert req["resident"]["resident_id"] == "R006" and req["call"]["caller"] is None
     assert req["pickup"]["point"] == "수하리 마을회관"  # 명부와 같은 마을이라 승차 지점을 채운다
+
+
+def test_messy_vapi_values_do_not_break_the_request():
+    from app.extract import from_dict
+    ex = from_dict({**FIELDS, "companion_needed": "Yes", "wheelchair_needed": "아니요", "intent": "병원",
+                    "date": "11월 24일", "time_expr": "", "evidence_village": "없음", "mobility": "모름"})
+    assert ex.companion_needed == "yes" and ex.wheelchair_needed == "unknown" and ex.intent == "other"
+    assert ex.date is None and ex.time_expr is None and ex.evidence_village is None and ex.mobility is None
+    assert from_dict({**FIELDS, "date": "2026-02-30"}).date is None
