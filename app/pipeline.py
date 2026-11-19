@@ -11,7 +11,7 @@ from . import store
 from .data import residents
 from .normalize import match_hospital, match_village, resolve_date, resolve_time
 from .validate import run_checks
-from .workflow import build_applications, refresh_status
+from .workflow import build_applications, make_summary, refresh_status
 
 KST = timezone(timedelta(hours=9))
 
@@ -132,6 +132,7 @@ def fill(req: dict, ex, today: date) -> dict:
                      "companion": ex.evidence_companion, "village": ex.evidence_village},
     })
     req["checks"] = run_checks(req, today) + extra
+    req["summary"] = make_summary(req, ex.summary)
     req["applications"] = build_applications(req)
     req["message"] = None
     return req
@@ -262,6 +263,7 @@ def choose_hospital(rid: str, hosp_id: str) -> dict:
     today = date.fromisoformat(req["created_at"][:10])
     extra = [c for c in req.get("checks", []) if c["type"] in ("village_mismatch", "date_mismatch")]
     req["checks"] = run_checks(req, today) + extra
+    req["summary"] = make_summary(req, req.get("summary"))
     if (req.get("message") or {}).get("status") != "sent":
         req["message"] = None  # 바뀐 병원으로 안내문을 다시 만든다
     kept = [a for a in req.get("applications") or [] if a["status"] != "draft"]

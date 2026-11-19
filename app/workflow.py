@@ -54,6 +54,26 @@ def _hospital_label(req: dict) -> str:
     return "확인 필요"
 
 
+def make_summary(req: dict, ai_summary: str | None) -> str:
+    """목록에 보일 한 줄 요약. 병원 방문은 규칙으로 바로잡은 날짜와 고른 병원으로 만든다."""
+    if req.get("intent") != "hospital_visit":
+        return ai_summary or ""
+    visit = req.get("visit") or {}
+    hosp = req.get("hospital") or {}
+    when = _date_label(visit["date"]) if visit.get("date") else (visit.get("date_expr") or "날짜 미정")
+    if visit.get("time"):
+        when += f" {visit['time']}"
+    cands = hosp.get("candidates") or []
+    where = cands[0]["name"] if hosp.get("status") == "matched" and cands else (
+        hosp.get("query") or hosp.get("department") or "병원 미정")
+    parts = [when, where]
+    if (req.get("companion") or {}).get("needed") == "yes":
+        parts.append("동행 필요")
+    if req.get("wheelchair_needed") == "yes":
+        parts.append("휠체어")
+    return " · ".join(parts)
+
+
 def _event(status: str, note: str = "") -> dict:
     from .pipeline import now_kst
     return {"at": now_kst().isoformat(timespec="seconds"), "status": status, "note": note}

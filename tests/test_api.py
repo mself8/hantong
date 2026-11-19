@@ -62,6 +62,10 @@ def test_vapi_call_to_confirmation_message():
     today = date.fromisoformat(req["created_at"][:10])
     assert req["visit"]["date"] == resolve_date("담주 화요일", today).isoformat()
 
+    # 한 줄 요약은 AI 요약 대신 규칙으로 바로잡은 날짜로 만든다
+    day = date.fromisoformat(req["visit"]["date"])
+    assert req["summary"].startswith(f"{day.month}월 {day.day}일(") and req["summary"].endswith("읍내 정형외과 · 동행 필요")
+
     # 수하리는 확인된 희망택시 마을이 아니고 휠체어도 필요 없어서 병원동행 신청서 하나만 만든다
     assert [a["type"] for a in req["applications"]] == ["companion"]
     app = req["applications"][0]
@@ -72,6 +76,7 @@ def test_vapi_call_to_confirmation_message():
     req = client.post(f"/api/requests/{rid}/hospital", json={"hosp_id": hosp_id}).json()
     assert req["hospital"]["status"] == "matched"
     assert req["applications"][0]["fields"]["병원"] == req["hospital"]["candidates"][0]["name"]
+    assert req["hospital"]["candidates"][0]["name"] in req["summary"]
 
     req = client.post(f"/api/requests/{rid}/submit").json()
     assert req["status"] == "submitted" and req["applications"][0]["status"] == "submitted"
