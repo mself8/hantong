@@ -156,8 +156,8 @@ def _fill_saved_maps() -> None:
     by_code = {v.code: v for v in villages()}
     for req in store.list_all(None):
         p = req.get("pickup") or {}
-        if p.get("map") or not p.get("village_code"):
-            continue
+        if (p.get("map") and "alts" in p["map"]) or not p.get("village_code"):
+            continue  # 이미 찾았으면 건너뛴다(같은 이름의 다른 곳을 세기 전에 찾은 것은 다시 찾는다)
         found = kakao.find_pickup(p.get("point"), by_code.get(p["village_code"]))
         if not found:  # 못 찾으면 저장하지 않고, 다음에 서버가 켜질 때 다시 찾아본다
             continue

@@ -42,7 +42,7 @@ def test_split_place_keeps_the_where_words_for_the_address():
 def test_finds_the_place_inside_the_elders_village(calls):
     found = kakao.find_pickup("수하리 마을회관 앞", SUHA)
     assert found == {"name": "수하리마을회관", "address": "강원특별자치도 홍천군 서석면 수하길 12",
-                     "url": "https://place.map.kakao.com/1", "tail": " 앞"}  # 춘천 수하리는 버린다
+                     "url": "https://place.map.kakao.com/1", "alts": [], "tail": " 앞"}  # 춘천 수하리는 버린다
     assert calls[0]["query"] == "홍천 서석면 수하리 마을회관" and calls[0]["radius"] == 5000
     assert calls[0]["x"] == SUHA.lon and calls[0]["y"] == SUHA.lat
 
@@ -53,6 +53,18 @@ def test_home_other_village_and_no_key_are_not_searched(calls, monkeypatch):
     assert calls == []
     monkeypatch.delenv("KAKAO_REST_KEY")
     assert kakao.find_pickup("마을회관 앞", SUHA) is None and calls == []
+
+
+def test_two_halls_in_one_village_need_a_check(calls, monkeypatch):
+    """실제 서버에서 본 경우: 수하리에는 수하1리·수하2리 마을회관이 따로 있다(여기서는 명부와 같은 풍암리로 시험)."""
+    pung = next(v for v in villages() if v.name == "풍암리")
+    hall = {**HALL, "address_name": "강원특별자치도 홍천군 서석면 풍암리 1"}
+    monkeypatch.setattr(kakao, "_search", lambda params: [{**hall, "place_name": "풍암2리마을회관"},
+                                                          {**hall, "place_name": "풍암1리마을회관"}])
+    rid = client.post("/vapi/webhook", json=report(dict(FIELDS, village="풍암리", address_detail="마을회관 앞"))).json()["id"]
+    place = client.get(f"/api/requests/{rid}").json()["facts"]["place"]
+    assert place["level"] == "check" and "풍암1리마을회관" in place["why"]
+    assert kakao.find_pickup("풍암2리 마을회관", pung)["alts"] == []  # 몇 리인지 말하면 확인할 필요 없다
 
 
 def test_not_found_tries_nearest_then_gives_up(calls):

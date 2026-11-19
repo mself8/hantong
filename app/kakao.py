@@ -67,9 +67,11 @@ def find_pickup(text: str | None, village) -> dict | None:
                         if "홍천군" in d["address_name"] and village.town in d["address_name"]
                         and village.name in d["address_name"]]
                 if docs:
-                    d = docs[0]
+                    d, same = docs[0], spot.replace(" ", "")
                     found = {"name": d["place_name"], "address": d.get("road_address_name") or d["address_name"],
-                             "url": (d.get("place_url") or "").replace("http://", "https://")}
+                             "url": (d.get("place_url") or "").replace("http://", "https://"),
+                             # 수하1리·수하2리처럼 같은 리에 같은 이름의 곳이 더 있으면 어느 곳인지 확인해야 한다
+                             "alts": [o["place_name"] for o in docs[1:3] if same in o["place_name"].replace(" ", "")]}
                     break
         except (httpx.HTTPError, KeyError, ValueError) as e:
             log.warning("카카오맵 검색 실패: %s", e)

@@ -153,6 +153,8 @@ def facts(req: dict) -> dict:
                       "level": "check" if why else "ok", "why": why}
         if p.get("map"):  # 카카오맵에서 찾은 실제 주소와 지도 링크
             f["place"].update(addr=pickup_address(p), url=p["map"].get("url"))
+            if p["map"].get("alts") and not why:
+                f["place"].update(level="check", why=f"같은 리에 {', '.join(p['map']['alts'])}도 있어요. 어느 곳인지 확인이 필요해요")
     else:
         f["place"] = {"value": "모름", "sub": p.get("detail") or "", "level": "missing", "why": "통화에서 마을이 나오지 않았어요"}
     return f
