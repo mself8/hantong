@@ -20,8 +20,7 @@ data/raw/
 *.wav
 *.mp3
 
-# 프론트엔드
+# 프론트엔드 (대시보드는 빌드 없는 HTML 한 장이라 dist를 레포에 둔다)
 node_modules/
-dashboard/dist/
 
 .DS_Store
