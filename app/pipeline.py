@@ -322,11 +322,17 @@ def submit_application(rid: str, aid: str | None = None) -> dict:
 
 
 def respond_application(rid: str, aid: str, result: str, detail: str = "") -> dict:
-    """기관 응답을 기록한다. 시연에서는 대시보드의 '기관 응답' 버튼이 대신 누른다."""
-    if result not in ("confirmed", "rejected"):
-        raise FlowError("응답은 confirmed나 rejected여야 해요.")
+    """기관 회신을 기록한다. 시연에서는 대시보드의 가능·불가·기타 버튼이 대신 누른다.
+    기타(note)는 상태를 바꾸지 않고 회신 메모만 남긴다(예: '날짜를 하루 미뤄 달래요')."""
+    if result not in ("confirmed", "rejected", "note"):
+        raise FlowError("회신은 confirmed·rejected·note 가운데 하나여야 해요.")
     req = _load(rid)
     app = _app_of(req, aid)
+    if result == "note":
+        if not detail.strip():
+            raise FlowError("남길 내용을 적어 주세요.")
+        app.setdefault("replies", []).append(_event(app["status"], detail.strip()))
+        return store.save(req)
     if app["status"] != "submitted":
         raise FlowError("제출한 신청서에만 응답할 수 있어요.")
     app["status"] = result

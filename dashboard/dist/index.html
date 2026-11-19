@@ -110,7 +110,12 @@
   .app .notes li::before { content: "• "; color: var(--warn-line); font-weight: 700; }
   .more { margin-top: 10px; } .more summary { color: var(--primary); cursor: pointer; font-size: 15px; font-weight: 500; }
   .respond { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 8px; }
-  .respond label { font-size: 14px; color: var(--text-3); }
+  .respond .rl { font-size: 14px; color: var(--text-3); }
+  .respond .other:not([hidden]) { display: flex; gap: 8px; }
+  .respond .other input { flex: 1; min-width: 0; }
+  .replies { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .reply { align-self: flex-start; max-width: 90%; background: var(--bg, #f4f5f7); border: 1px solid var(--line); border-radius: 4px 12px 12px 12px; padding: 8px 12px; font-size: 15px; }
+  .reply .num { color: var(--text-3); font-size: 13px; margin-right: 8px; }
   .respond input { height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font-size: 16px; }
   .respond .btns { display: flex; gap: 8px; }
   .btn { height: 44px; border-radius: 10px; padding: 0 16px; font-size: 16px; font-weight: 600; border: 1px solid var(--line); background: #fff; }
@@ -240,7 +245,7 @@ function action(r) {
                   : `<button class="primary" data-act="submit">신청서 ${drafts.length}장 제출</button><span class="hint">기관별 신청서를 한 번에 보내요</span>`;
   if ((r.status === "confirmed" || (r.status === "pending" && !apps.length)) && r.message && r.message.status !== "sent")
     return `<button class="primary" data-act="send">어르신께 안내 보내기</button><span class="hint">아래 문자 내용을 확인하세요</span>`;
-  if (r.status === "submitted") return `<span class="note">기관 답을 기다리는 중이에요</span>`;
+  if (r.status === "submitted") return `<span class="note">기관 회신을 기다리는 중이에요</span>`;
   if (r.status === "notified") return `<span class="note">안내까지 끝났어요</span>`;
   if (r.status === "held") return `<span class="note">보류한 요청이에요</span>`;
   return "";
@@ -271,18 +276,19 @@ function renderDetail() {
     const f = a.fields || {}, keys = KEY_FIELDS[a.type] || [];
     const kv = (pairs) => pairs.map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(val)}</dd>`).join("");
     const main = kv(keys.filter((k) => f[k]).map((k) => [k, f[k]]));
-    const rest = kv(Object.entries(f).filter(([k]) => !keys.includes(k)));
     const notes = (a.notes || []).map((n) => `<li>${esc(n)}</li>`).join("");
-    const resp = a.status === "submitted"
-      ? `<div class="respond"><label for="d-${esc(a.id)}">기관 답 기록 (시연)</label>
-           <input id="d-${esc(a.id)}" data-detail="${esc(a.id)}" placeholder="예: 9시에 마을회관으로 모시러 감">
-           <div class="btns"><button class="btn ok" data-act="confirm" data-app="${esc(a.id)}">확정</button><button class="btn no" data-act="reject" data-app="${esc(a.id)}">불가</button></div></div>`
-      : (a.response ? `<div class="answer">기관 답: ${esc(a.response.detail || (a.response.result === "confirmed" ? "확정" : "불가"))}</div>` : "");
+    const replies = (a.replies || []).map((x) => `<div class="reply"><span class="num">${esc(hhmm(x.at))}</span>${esc(x.note)}</div>`).join("");
+    const answer = a.response ? `<div class="answer">기관 회신: <b>${a.response.result === "confirmed" ? "가능" : "불가"}</b>${a.response.detail ? ` · ${esc(a.response.detail)}` : ""}</div>` : "";
+    const resp = (a.status === "submitted"
+      ? `<div class="respond"><span class="rl">기관 회신 (시연)</span>
+           <div class="btns"><button class="btn ok" data-act="confirm" data-app="${esc(a.id)}">가능</button><button class="btn no" data-act="reject" data-app="${esc(a.id)}">불가</button><button class="btn" data-act="other" data-app="${esc(a.id)}">기타</button></div>
+           <div class="other" data-other="${esc(a.id)}" hidden><input data-note="${esc(a.id)}" aria-label="기관 회신 메모" placeholder="예: 날짜를 하루 미뤄 달래요"><button class="btn" data-act="note" data-app="${esc(a.id)}">남기기</button></div></div>`
+      : answer) + (replies ? `<div class="replies">${replies}</div>` : "");
     return `<article class="app"><div class="app-h"><div class="n"><b>${esc(a.label)}</b><span>${esc(a.agency)} · <span class="num">${esc(a.contact)}</span></span></div>
         ${badge(a.status === "draft" ? "draft" : a.status, APP_STATUS[a.status] || a.status)}</div>
       <dl class="kv">${main}</dl>${notes ? `<ul class="notes">${notes}</ul>` : ""}
       <div class="more"><a class="linkbtn" href="/forms/${encodeURIComponent(r.id)}/${encodeURIComponent(a.id)}" target="_blank" rel="noopener">신청서 양식으로 보기 · 인쇄 ↗</a></div>
-      ${rest ? `<details class="more"><summary>신청서 전체 칸 보기</summary><dl class="kv">${rest}</dl></details>` : ""}${resp}</article>`;
+      ${resp}</article>`;
   }).join("");
   const appsPart = `<section class="part"><h3>기관별 신청서 <span class="cnt">${(r.applications || []).length}장</span>
       <button class="btn" style="margin-left:auto;height:38px;font-size:15px" data-act="pdf">신청서 PDF 내려받기</button></h3>
@@ -331,10 +337,19 @@ document.addEventListener("click", (e) => {
     case "editmsg": editMsg = true; renderDetail(); break;
     case "cancelmsg": editMsg = false; renderDetail(); break;
     case "savemsg": act(`${base}/message`, { text: $("msg").value }, "PUT", "안내 문자를 고쳤어요"); break;
-    case "confirm": case "reject": {
-      const input = document.querySelector(`[data-detail="${t.dataset.app}"]`);
-      act(`${base}/applications/${t.dataset.app}/respond`, { result: t.dataset.act === "confirm" ? "confirmed" : "rejected", detail: input ? input.value : "" },
-        "POST", t.dataset.act === "confirm" ? "기관 확정을 기록했어요" : "불가를 기록했어요");
+    case "confirm": case "reject":
+      act(`${base}/applications/${t.dataset.app}/respond`, { result: t.dataset.act === "confirm" ? "confirmed" : "rejected", detail: "" },
+        "POST", t.dataset.act === "confirm" ? "기관이 가능하다고 기록했어요" : "기관이 불가하다고 기록했어요");
+      break;
+    case "other": {  // 기타: 메모 칸을 펼친다
+      const box = document.querySelector(`[data-other="${t.dataset.app}"]`);
+      if (box) { box.hidden = false; box.querySelector("input").focus(); }
+      break;
+    }
+    case "note": {
+      const input = document.querySelector(`[data-note="${t.dataset.app}"]`);
+      if (input && input.value.trim())
+        act(`${base}/applications/${t.dataset.app}/respond`, { result: "note", detail: input.value.trim() }, "POST", "기관 회신 메모를 남겼어요");
       break;
     }
     case "hold": act(`${base}/hold`, { memo: "" }, "POST", "보류했어요"); break;

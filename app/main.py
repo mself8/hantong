@@ -136,7 +136,7 @@ class FieldsIn(BaseModel):
 
 
 class RespondIn(BaseModel):
-    result: str  # confirmed | rejected
+    result: str  # confirmed | rejected | note(기타 메모)
     detail: str = ""
 
 

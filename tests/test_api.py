@@ -256,3 +256,14 @@ def test_pdf_bundle_has_official_forms():
     # 통합지원 신청서 2쪽 + 기관 신청서 2장(병원동행, 특별교통수단) + 미등록이라 등록 신청서 4쪽
     assert doc.page_count == 8, doc.page_count
     assert "통합지원" in text and "한○○" in text and "등록 신청서" in text
+
+
+def test_agency_other_reply_is_kept_as_memo():
+    rid = client.post("/vapi/webhook", json=report()).json()["id"]
+    client.post(f"/api/requests/{rid}/submit")
+    path = f"/api/requests/{rid}/applications/A1/respond"
+    req = client.post(path, json={"result": "note", "detail": "날짜를 하루 미뤄 달래요"}).json()
+    app_ = req["applications"][0]
+    assert app_["status"] == "submitted" and app_["replies"][0]["note"] == "날짜를 하루 미뤄 달래요"  # 기타는 상태를 바꾸지 않는다
+    assert client.post(path, json={"result": "note", "detail": " "}).status_code == 409
+    assert client.post(path, json={"result": "confirmed"}).json()["applications"][0]["status"] == "confirmed"
