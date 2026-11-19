@@ -31,12 +31,12 @@ def mask_phone(num: str | None) -> str | None:
 
 
 def _demo_callers() -> dict[str, str]:
-    """시연용 전화번호 -> 가상 어르신 ID. 환경변수 DEMO_CALLERS="01012345678:R001,..." (레포에 넣지 않는다)."""
+    """시연용 전화번호 -> 가상 어르신 ID. 환경변수 DEMO_CALLERS="web:R006,01012345678:R001" (레포에 넣지 않는다)."""
     out = {}
     for pair in os.getenv("DEMO_CALLERS", "").split(","):
         if ":" in pair:
             num, rid = pair.split(":", 1)
-            out[_digits(num)] = rid.strip()
+            out[_digits(num) or num.strip()] = rid.strip()
     return out
 
 
@@ -55,7 +55,7 @@ def _resident_view(r: dict) -> dict:
 
 
 def find_resident(caller: str | None) -> dict | None:
-    rid = _demo_callers().get(_digits(caller))
+    rid = _demo_callers().get(_digits(caller) or "web")  # 웹 통화(Vapi 화면에서 건 통화)는 번호가 없다
     r = next((x for x in residents() if x["resident_id"] == rid), None) if rid else None
     return _resident_view(r) if r else None
 

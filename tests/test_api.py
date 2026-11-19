@@ -146,3 +146,13 @@ def test_structured_output_as_json_text():
     rid = client.post("/vapi/webhook", json=report(json.dumps(FIELDS, ensure_ascii=False))).json()["id"]
     req = client.get(f"/api/requests/{rid}").json()
     assert "신청서 초안 작성 (Vapi가 뽑은 항목으로)" in [h["note"] for h in req["history"]]
+
+
+def test_web_call_without_number_uses_demo_resident(monkeypatch):
+    monkeypatch.setenv("DEMO_CALLERS", "web:R006,01012345678:R001")
+    body = report()
+    body["message"]["call"] = {"id": "web-1", "type": "webCall"}
+    rid = client.post("/vapi/webhook", json=body).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert req["resident"]["resident_id"] == "R006" and req["call"]["caller"] is None
+    assert req["pickup"]["point"] == "수하리 마을회관"  # 명부와 같은 마을이라 승차 지점을 채운다
