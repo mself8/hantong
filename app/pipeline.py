@@ -105,6 +105,18 @@ def new_request(turns: list[dict], *, source: str, call: dict | None = None,
     return store.save(req)
 
 
+_NAME_TAIL = re.compile(r"(이라고해요|라고해요|이라고요|라고요|입니다|이에요|이예요|예요|이에|이요|이유|이여|이고요|이래요|요)$")
+
+
+def clean_name(name: str | None) -> str | None:
+    """'서영재이에', '김순자요'처럼 말끝(사투리 포함)이 붙은 성함에서 성함만 남긴다."""
+    n = re.sub(r"[^가-힣]", "", name or "")
+    base = _NAME_TAIL.sub("", n)
+    if len(base) == 4 and base.endswith("이"):  # '서영재이': 받침 없는 이름 뒤에 붙는 부르는 말 '-이'
+        base = base[:-1]
+    return base if len(base) >= 2 else (n or None)
+
+
 def _town_in(text: str | None) -> str | None:
     """'홍천읍', '서석면 쪽' 같은 말에서 홍천군 읍·면 이름을 찾는다."""
     return next((t for t in sorted({v.town for v in villages()}, key=len, reverse=True) if text and t in text), None)
@@ -141,10 +153,10 @@ def fill(req: dict, ex, today: date) -> dict:
                  else f"말씀하신 '{ex.village}'를 홍천 리 목록에서 찾지 못해" if ex.village else "통화에서 마을을 확인하지 못해")
         extra.append({"type": "village_from_roster", "level": "warn",
                       "message": f"{heard} 등록된 주소({roster_village.label})로 채웠어요. 확인이 필요해요."})
-    known = (resident or {}).get("name")
-    if ex.caller_name and known and ex.caller_name.replace(" ", "") != known.replace(" ", ""):
+    known, said_name = (resident or {}).get("name"), clean_name(ex.caller_name)
+    if said_name and known and said_name != known.replace(" ", ""):
         extra.append({"type": "name_mismatch", "level": "warn",
-                      "message": f"통화에서 말한 성함({ex.caller_name})이 이 번호로 등록된 이름({known})과 달라요. 본인인지 확인이 필요해요."})
+                      "message": f"통화에서 말한 성함({said_name})이 이 번호로 등록된 이름({known})과 달라요. 본인인지 확인이 필요해요."})
     if rule_date and ex.date and rule_date.isoformat() != ex.date:
         extra.append({"type": "date_mismatch", "level": "warn",
                       "message": f"통화에서 확인한 날짜({ex.date})와 말씀하신 표현('{ex.date_expr}')으로 계산한 날짜"
@@ -158,7 +170,7 @@ def fill(req: dict, ex, today: date) -> dict:
                   "date_source": "rule" if rule_date else ("ai" if ex.date else None),
                   "time_expr": ex.time_expr, "time": resolve_time(ex.time_expr)},
         "companion": {"needed": ex.companion_needed, "reason": ex.companion_reason},
-        "caller_name": ex.caller_name,
+        "caller_name": clean_name(ex.caller_name),
         "pickup": {"village_expr": ex.village, "village": village.label if village else spoken_town,
                    "village_code": village.code if village else None,
                    "detail": ex.address_detail,

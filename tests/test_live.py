@@ -93,3 +93,7 @@ def test_report_replaces_live_turns_and_fixes_name():
     full = [{"role": "ai", "text": "안녕하세요."}, {"role": "elder", "text": "병원 가요."}, {"role": "ai", "text": "어디가 편찮으세요?"}]
     live.finish({"call": {"id": c}}, "Q-1", full)
     assert [t[1] for t in turns(c)] == ["안녕하세요.", "병원 가요.", "어디가 편찮으세요?"]
+
+
+def test_service_name_fixed_even_when_split_by_punctuation():
+    assert live.fix_name("안녕하세요, 홍천. 한통이. 면 대유 AI 상담원입니다.") == "안녕하세요, 홍천. '한 통이면 돼유' AI 상담원입니다."

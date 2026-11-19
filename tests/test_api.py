@@ -323,3 +323,13 @@ def test_official_forms_as_word():
         assert "한옥순" in text and rid in text
     assert "[√] 대상자 본인" in "\n".join(c.text for row in Document(io.BytesIO(
         client.get(f"/api/requests/{rid}/forms/integrated.docx").content)).tables[0].rows for c in row.cells)
+
+
+def test_dialect_endings_are_not_part_of_the_name():
+    from app.pipeline import clean_name
+    assert clean_name("서영재이에") == "서영재" and clean_name("서영재이") == "서영재"
+    assert clean_name("김순자요") == "김순자" and clean_name("정송윤이요") == "정송윤" and clean_name("한옥순입니다") == "한옥순"
+    assert clean_name("김민준") == "김민준" and clean_name("남궁민수") == "남궁민수"
+    rid = client.post("/vapi/webhook", json=report(dict(FIELDS, caller_name="한옥순이에"))).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert req["display_name"] == "한옥순" and not any(c["type"] == "name_mismatch" for c in req["checks"])
