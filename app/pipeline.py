@@ -117,6 +117,16 @@ def clean_name(name: str | None) -> str | None:
     return base if len(base) >= 2 else (n or None)
 
 
+# 한국 성씨(드문 성 포함). 이 밖의 성으로 들리면('삔고은') 전화 소리 때문에 잘못 들었을 수 있다.
+SURNAMES = set("김이박최정강조윤장임한오서신권황안송전홍유고문양손배백허노남심하곽성차주우구민류나진지엄채원천방공현함변염여추"
+               "도석소선설마길연위표명기반라왕금옥육인맹제모탁국어은편용예경봉사부가복태목형피두감음빈동온호범좌팽승간상갈시견당화창옹순묵판매")
+SURNAMES_2 = {"남궁", "황보", "제갈", "선우", "독고", "사공", "서문", "동방"}
+
+
+def unusual_surname(name: str | None) -> bool:
+    return bool(name) and name[:2] not in SURNAMES_2 and name[0] not in SURNAMES
+
+
 def _town_in(text: str | None) -> str | None:
     """'홍천읍', '서석면 쪽' 같은 말에서 홍천군 읍·면 이름을 찾는다."""
     return next((t for t in sorted({v.town for v in villages()}, key=len, reverse=True) if text and t in text), None)
@@ -157,6 +167,9 @@ def fill(req: dict, ex, today: date) -> dict:
     if said_name and known and said_name != known.replace(" ", ""):
         extra.append({"type": "name_mismatch", "level": "warn",
                       "message": f"통화에서 말한 성함({said_name})이 이 번호로 등록된 이름({known})과 달라요. 본인인지 확인이 필요해요."})
+    if unusual_surname(said_name):
+        extra.append({"type": "name_unusual", "level": "warn",
+                      "message": f"통화에서 들은 성함({said_name})의 성 '{said_name[0]}'은 흔한 성이 아니라 잘못 들었을 수 있어요. 확인이 필요해요."})
     if rule_date and ex.date and rule_date.isoformat() != ex.date:
         extra.append({"type": "date_mismatch", "level": "warn",
                       "message": f"통화에서 확인한 날짜({ex.date})와 말씀하신 표현('{ex.date_expr}')으로 계산한 날짜"

@@ -343,3 +343,14 @@ def test_bus_answer_decides_transport():
     assert facts_for(bus_ok="no")["value"] == "교통편 확인 필요"            # 풍암리는 희망택시 마을이 아니다
     unknown = facts_for(bus_ok="unknown")
     assert unknown["value"] == "농어촌버스" and unknown["why"] == "버스를 타실 수 있는지 듣지 못했어요"
+
+
+def test_misheard_surname_is_flagged():
+    """실제 통화에서 본 경우: '김고은'을 전화 소리로 '삔고은'이라고 받아 적었다."""
+    from app.pipeline import unusual_surname
+    assert unusual_surname("삔고은") and not unusual_surname("김고은") and not unusual_surname("남궁민")
+    rid = client.post("/vapi/webhook", json=report(dict(FIELDS, caller_name="삔고은"))).json()["id"]
+    checks = client.get(f"/api/requests/{rid}").json()["checks"]
+    assert any(c["type"] == "name_unusual" and "'삔'" in c["message"] for c in checks)
+    rid = client.post("/vapi/webhook", json=report(dict(FIELDS, caller_name="김고은"))).json()["id"]
+    assert not any(c["type"] == "name_unusual" for c in client.get(f"/api/requests/{rid}").json()["checks"])
