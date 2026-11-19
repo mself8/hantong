@@ -216,6 +216,16 @@ def voice_card_list() -> str:
             "<p>한 사람이 카드 한 장씩 맡아 통화해 주세요. 카드를 누르면 대본이 보여요.</p>" + rows + "</main></body></html>")
 
 
+@app.get("/forms/{rid}/{aid}", response_class=HTMLResponse)
+def application_form(rid: str, aid: str) -> str:
+    """기관별 신청서 한 장을 인쇄용 양식으로 보여 준다."""
+    req = store.get(rid)
+    app_ = next((a for a in (req or {}).get("applications") or [] if a["id"] == aid), None)
+    if not app_:
+        raise HTTPException(status_code=404, detail="없는 신청서")
+    return view.form_page(req, app_)
+
+
 @app.get("/view", response_class=HTMLResponse)
 def view_page() -> str:
     """신청서·안내문 확인용 읽기 전용 화면 (대시보드와 별개로 항상 열린다)."""

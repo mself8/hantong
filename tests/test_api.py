@@ -224,3 +224,22 @@ def test_voice_card_call_is_tagged_and_not_linked_to_roster():
     assert req["call"]["card"] == "V01" and req["resident"] is None
     assert len(client.get("/api/voice-cards").json()) == 18
     assert "V18" in client.get("/call/cards").text
+
+
+def test_unheard_village_and_changed_date_are_flagged(monkeypatch):
+    """통화 시험에서 나온 경우: 모르는 마을을 명부로 조용히 채우지 않고, 바뀐 날짜는 경고한다."""
+    monkeypatch.setattr(extract_mod, "extract", lambda turns, today: Extraction(**{
+        **FIELDS, "village": "교동리", "hospital_query": None, "department": None, "evidence_hospital": "배가 아파요",
+        "date_expr": "다음 주 화요일", "date": "2030-01-01"}))
+    rid = client.post("/vapi/webhook", json=report()).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    types = {c["type"]: c["level"] for c in req["checks"]}
+    assert types.get("village_from_roster") == "warn" and types.get("date_mismatch") == "warn"
+    assert req["hospital"]["department"] == "내과" and req["hospital"]["basis"] == "department"
+
+
+def test_application_form_page():
+    rid = client.post("/vapi/webhook", json=report()).json()["id"]
+    html = client.get(f"/forms/{rid}/A1").text
+    assert "병원동행 신청서" in html and "제출처" in html and "인쇄하기" in html
+    assert client.get(f"/forms/{rid}/A9").status_code == 404

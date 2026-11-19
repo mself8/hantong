@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from . import store
 from .data import residents
-from .normalize import match_hospital, match_village, resolve_date, resolve_time
+from .normalize import detect_department, match_hospital, match_village, resolve_date, resolve_time
 from .validate import run_checks
 from .workflow import build_applications, make_summary, refresh_status
 
@@ -108,20 +108,29 @@ def fill(req: dict, ex, today: date) -> dict:
     """뽑은 항목(ex)을 실제 목록에 맞추고 규칙으로 점검해 신청서에 채운다."""
     resident = req.get("resident")
     roster_village = match_village(resident["village"]) if resident else None
-    village = match_village(ex.village) or roster_village
+    spoken_village = match_village(ex.village)
+    village = spoken_village or roster_village
     same_as_roster = bool(roster_village and village and roster_village.code == village.code)
     home_town = village.town if village else None
-    hosp = match_hospital(ex.hospital_query, ex.department, home_town, village.name if village else None)
+    # 병원 이름 없이 아픈 곳만 말한 경우("배가 아파요")에도 진료과를 잡는다
+    dept = ex.department or next((d for d in (detect_department(t) for t in (
+        ex.hospital_query, ex.evidence_hospital, ex.companion_reason, ex.summary)) if d), None)
+    hosp = match_hospital(ex.hospital_query, dept, home_town, village.name if village else None)
 
     rule_date = resolve_date(ex.date_expr, today)
     visit_date = rule_date.isoformat() if rule_date else ex.date
     extra = []
-    if roster_village and village and not same_as_roster:
+    if roster_village and spoken_village and not same_as_roster:
         extra.append({"type": "village_mismatch", "level": "warn",
                       "message": f"명부에는 {roster_village.label}인데 통화에서는 {village.label}라고 했어요. 확인이 필요해요."})
+    if roster_village and not spoken_village:  # 통화에서 마을을 못 들었는데 명부로 채운 경우
+        heard = f"말씀하신 '{ex.village}'를 홍천 리 목록에서 찾지 못해" if ex.village else "통화에서 마을을 확인하지 못해"
+        extra.append({"type": "village_from_roster", "level": "warn",
+                      "message": f"{heard} 명부 마을({roster_village.label})을 넣었어요. 확인이 필요해요."})
     if rule_date and ex.date and rule_date.isoformat() != ex.date:
-        extra.append({"type": "date_mismatch", "level": "info",
-                      "message": f"날짜 계산이 엇갈려 규칙으로 계산한 {rule_date.isoformat()}를 썼어요 (AI 계산: {ex.date})."})
+        extra.append({"type": "date_mismatch", "level": "warn",
+                      "message": f"통화에서 확인한 날짜({ex.date})와 말씀하신 표현('{ex.date_expr}')으로 계산한 날짜"
+                                 f"({rule_date.isoformat()})가 달라요. 통화 기록을 보고 확인해 주세요."})
 
     req.update({
         "intent": ex.intent,
@@ -273,7 +282,7 @@ def choose_hospital(rid: str, hosp_id: str) -> dict:
                        "candidates": [{"id": h.id, "name": h.name, "kind": h.kind,
                                        "town": h.town or h.sigungu, "far": h.far}]}
     today = date.fromisoformat(req["created_at"][:10])
-    extra = [c for c in req.get("checks", []) if c["type"] in ("village_mismatch", "date_mismatch")]
+    extra = [c for c in req.get("checks", []) if c["type"] in ("village_mismatch", "village_from_roster", "date_mismatch")]
     req["checks"] = run_checks(req, today) + extra
     req["summary"] = make_summary(req, req.get("summary"))
     if (req.get("message") or {}).get("status") != "sent":

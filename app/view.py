@@ -99,3 +99,48 @@ def page(limit: int = 30) -> str:
             "<h1>한 통이면 돼유 · 신청서 확인</h1>"
             "<p class='lead'>대시보드가 나오기 전 확인용 화면이에요. 새로고침하면 최신 신청이 보여요.</p>"
             f"{body}</main></body></html>")
+
+
+FORM_CSS = """
+@font-face { font-family:"Paperlogy"; src:url("/fonts/Paperlogy-4Regular.woff2") format("woff2"); font-weight:400; }
+@font-face { font-family:"Paperlogy"; src:url("/fonts/Paperlogy-7Bold.woff2") format("woff2"); font-weight:700; }
+* { box-sizing:border-box; }
+body { margin:0; background:#eceef1; color:#1e2124; font-family:"Paperlogy","Apple SD Gothic Neo",sans-serif; word-break:keep-all; }
+.sheet { width:210mm; min-height:297mm; margin:24px auto; background:#fff; padding:20mm 18mm; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+h1 { font-size:26px; text-align:center; margin:0 0 6px; letter-spacing:2px; }
+.to { text-align:center; color:#464c53; margin:0 0 18px; }
+.meta { display:flex; justify-content:space-between; font-size:13px; color:#6d7882; border-bottom:2px solid #1e2124; padding-bottom:8px; }
+table { width:100%; border-collapse:collapse; margin-top:14px; font-size:15px; }
+th, td { border:1px solid #9aa4ae; padding:10px 12px; text-align:left; vertical-align:top; }
+th { width:28%; background:#f4f5f7; font-weight:700; }
+h2 { font-size:16px; margin:20px 0 6px; }
+ul { margin:0; padding-left:20px; font-size:14px; color:#464c53; line-height:1.7; }
+.sign { margin-top:28px; display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:14px; }
+.sign div { border:1px solid #9aa4ae; padding:12px; min-height:64px; }
+.foot { margin-top:18px; font-size:12px; color:#6d7882; }
+.bar { text-align:center; margin:16px; }
+.bar button { font:inherit; font-size:16px; padding:10px 22px; border:0; border-radius:10px; background:#256ef4; color:#fff; cursor:pointer; }
+@media print { body { background:#fff; } .sheet { margin:0; box-shadow:none; width:auto; min-height:auto; } .bar { display:none; } }
+@page { size:A4; margin:12mm; }
+"""
+
+
+def form_page(req: dict, app: dict) -> str:
+    """기관에 내는 신청서 한 장(인쇄용)."""
+    rows = "".join(f"<tr><th>{_e(k)}</th><td>{_e(v)}</td></tr>" for k, v in (app.get("fields") or {}).items())
+    notes = "".join(f"<li>{_e(n)}</li>" for n in app.get("notes") or [])
+    return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            f"<title>{_e(app['label'])} · {_e(req['id'])}</title><style>{FORM_CSS}</style></head><body>"
+            "<div class='bar'><button onclick='window.print()'>인쇄하기</button></div>"
+            f"<div class='sheet'><h1>{_e(app['label'])}</h1>"
+            f"<p class='to'>제출처: {_e(app['agency'])} ({_e(app['contact'])})</p>"
+            f"<div class='meta'><span>접수번호 {_e(req['id'])}-{_e(app['id'])}</span>"
+            f"<span>접수일 {_e(req.get('created_at', '')[:10])}</span>"
+            f"<span>상태 {_e(APP_STATUSES.get(app['status'], app['status']))}</span></div>"
+            f"<table>{rows}</table>"
+            + (f"<h2>담당자 확인 사항</h2><ul>{notes}</ul>" if notes else "")
+            + "<div class='sign'><div>읍·면 담당자 확인<br><br>성명:　　　　　　(서명)</div>"
+              "<div>기관 접수 확인<br><br>성명:　　　　　　(서명)</div></div>"
+              "<p class='foot'>이 신청서는 어르신 전화 내용을 AI가 정리한 초안입니다. 담당 공무원이 확인한 뒤 제출합니다. "
+              "AI는 진단·자격 판정을 하지 않습니다.</p></div></body></html>")

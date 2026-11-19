@@ -122,7 +122,7 @@
   .sms-meta { color: var(--text-3); font-size: 14px; margin-top: 8px; }
   textarea { width: 100%; max-width: 640px; min-height: 140px; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 17px; line-height: 1.6; }
   .msg-tools { display: flex; gap: 8px; margin-top: 10px; }
-  .linkbtn { background: none; border: 0; padding: 0; color: var(--primary); font-size: 15px; font-weight: 500; }
+  .linkbtn { background: none; border: 0; padding: 0; color: var(--primary); font-size: 15px; font-weight: 500; text-decoration: none; }
 
   .quotes { display: grid; gap: 10px; }
   .quote { border-left: 4px solid var(--line); padding: 4px 0 4px 14px; }
@@ -269,7 +269,8 @@ function renderDetail() {
     return `<article class="app"><div class="app-h"><div class="n"><b>${esc(a.label)}</b><span>${esc(a.agency)} · <span class="num">${esc(a.contact)}</span></span></div>
         ${badge(a.status === "draft" ? "draft" : a.status, APP_STATUS[a.status] || a.status)}</div>
       <dl class="kv">${main}</dl>${notes ? `<ul class="notes">${notes}</ul>` : ""}
-      ${rest ? `<details class="more"><summary>신청서 전체 보기</summary><dl class="kv">${rest}</dl></details>` : ""}${resp}</article>`;
+      <div class="more"><a class="linkbtn" href="/forms/${encodeURIComponent(r.id)}/${encodeURIComponent(a.id)}" target="_blank" rel="noopener">신청서 양식으로 보기 · 인쇄 ↗</a></div>
+      ${rest ? `<details class="more"><summary>신청서 전체 칸 보기</summary><dl class="kv">${rest}</dl></details>` : ""}${resp}</article>`;
   }).join("");
   const appsPart = `<section class="part"><h3>기관별 신청서 <span class="cnt">${(r.applications || []).length}장</span></h3>
     ${apps ? `<div class="apps">${apps}</div>` : `<p class="note">기관에 낼 신청서가 없는 건이에요.</p>`}</section>`;
