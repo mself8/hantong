@@ -177,6 +177,8 @@ def list_villages() -> list[dict]:
 # ── 시연용 웹 통화 페이지 (발표장 QR 코드) ──────────────
 
 CALL_PAGE = Path(__file__).resolve().parent / "static" / "call.html"
+PAPERLOGY = "".join(f"@font-face{{font-family:'Paperlogy';src:url('/fonts/Paperlogy-{w}.woff2') format('woff2');font-weight:{n}}}"
+                    for w, n in (("4Regular", 400), ("6SemiBold", 600), ("7Bold", 700)))
 DEFAULT_ASSISTANT = "e441e44c-5204-458d-a2d2-f8676774de27"
 
 
@@ -204,7 +206,7 @@ def voice_card_list() -> str:
         for c in voice_cards())
     return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'><title>음성 시험 카드</title>"
-            "<style>body{margin:0;background:#f6f4ef;color:#1d2433;font-family:'Noto Sans KR','Apple SD Gothic Neo',sans-serif}"
+            "<style>" + PAPERLOGY + "body{margin:0;background:#f6f4ef;color:#1d2433;font-family:'Paperlogy','Apple SD Gothic Neo',sans-serif;word-break:keep-all}"
             "main{max-width:480px;margin:0 auto;padding:24px 16px}h1{font-size:22px;margin:0 0 6px}p{color:#5b6475;margin:0 0 16px}"
             ".c{display:grid;grid-template-columns:48px 1fr;gap:2px 10px;background:#fff;border:1px solid #e3dfd6;border-radius:12px;"
             "padding:12px 14px;margin-bottom:8px;color:inherit;text-decoration:none}.c b{grid-row:span 2;font-size:18px}"

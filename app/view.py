@@ -10,10 +10,12 @@ STATUS = {"processing": "정리 중", "pending": "확인 대기", "submitted": "
           "confirmed": "안내 대기", "notified": "안내 완료", "held": "보류"}
 
 CSS = """
+@font-face { font-family:"Paperlogy"; src:url("/fonts/Paperlogy-4Regular.woff2") format("woff2"); font-weight:400; }
+@font-face { font-family:"Paperlogy"; src:url("/fonts/Paperlogy-7Bold.woff2") format("woff2"); font-weight:700; }
 :root { --ink:#1d2433; --muted:#5b6475; --bg:#f6f4ef; --card:#fff; --line:#e3dfd6; --warn:#b3261e; --ok:#1f7a45; }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--ink);
-       font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif; font-size:15px; line-height:1.55; }
+       font-family:"Paperlogy","Apple SD Gothic Neo","Malgun Gothic",sans-serif; word-break:keep-all; font-size:15px; line-height:1.55; }
 main { max-width:960px; margin:0 auto; padding:24px 16px 48px; }
 h1 { font-size:22px; margin:0 0 4px; } .lead { color:var(--muted); margin:0 0 20px; }
 .req { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:18px; }
