@@ -80,3 +80,18 @@ def test_village():
     assert match_village("수하 사는데").label == "서석면 수하리"
     assert match_village("서석면 풍암리").label == "서석면 풍암리"
     assert match_village(None) is None
+
+
+def test_rules_found_by_eval_set():
+    """가상 통화 평가 자료(v1)의 규칙 점검에서 찾은 경우들."""
+    from datetime import date as d
+    assert resolve_date("이틀 뒤에 가야 해요", d(2026, 12, 15)) == d(2026, 12, 17)
+    assert resolve_date("하루 뒤", d(2026, 12, 31)) == d(2027, 1, 1)
+    assert match_village("북방면 능평리에서 출발해요").label == "북방면 능평리"
+    assert match_village("홍천읍 진리에서 출발해요").label == "홍천읍 진리"
+    assert names(match_hospital("홍천한의원에서 한방내과 진료를 보려고요")) == ["홍천한의원"]
+    assert names(match_hospital("서울삼성내과에서 내과 진료를 보려고요")) == ["서울삼성내과의원"]
+    r = match_hospital("춘천성심병원인지 춘천 강원대병원인지 헷갈려요")
+    assert r["status"] == "candidates" and set(names(r)) == {"한림대학교춘천성심병원", "강원대학교병원"}
+    r = match_hospital("병원 이름은 잘 모르고 가정의학과에 가야 해요")
+    assert r["basis"] in ("department", None) and not any("사단" in n for n in names(r))

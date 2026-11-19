@@ -22,6 +22,9 @@ def _add_month(d: date, months: int, day: int) -> date | None:
     return date(y, m, day)
 
 
+AFTER_DAYS = {"하루": 1, "이틀": 2, "사흘": 3, "나흘": 4, "닷새": 5, "엿새": 6, "이레": 7, "일주일": 7}
+
+
 def resolve_date(expr: str | None, today: date) -> date | None:
     """'담주 화요일', '모레', '25일', '다음 달 3일' 같은 표현을 날짜로 바꾼다. 범위나 애매한 표현은 None."""
     s = re.sub(r"\s+", "", expr or "")
@@ -35,6 +38,12 @@ def resolve_date(expr: str | None, today: date) -> date | None:
         return today + timedelta(days=2)
     if "내일" in s:
         return today + timedelta(days=1)
+    m = re.search(r"(하루|이틀|사흘|나흘|닷새|엿새|이레|일주일)(뒤|후|있다가)", s)
+    if m:
+        return today + timedelta(days=AFTER_DAYS[m.group(1)])
+    m = re.search(r"(\d{1,2})일(뒤|후)", s)
+    if m:
+        return today + timedelta(days=int(m.group(1)))
 
     m = re.search(r"(\d{1,2})월(\d{1,2})일", s)
     if m:
@@ -165,6 +174,19 @@ def _has_dept(h: Hospital, dept: str) -> bool:
 
 
 SEOUL_BIG = ("아산", "삼성", "대병원", "성모", "세브란스", "큰병원")
+CLOSED_TO_PUBLIC = ("사단", "의무대", "부대", "교도")  # 군부대·교정시설 의원은 주민이 못 간다
+
+
+def _name_variants(h: Hospital) -> set[str]:
+    """어르신이 기관을 부를 만한 이름. '홍천치과의원' → '홍천치과의원', '홍천치과'."""
+    n = h.name.replace(" ", "").replace("의료법인", "")
+    out = {n}
+    for suf in SUFFIXES:
+        if n.endswith(suf):
+            base = n[: -len(suf)]
+            out.add(base + {"치과의원": "치과", "한의원": "한의원"}.get(suf, ""))
+            break
+    return {v for v in out if len(v) >= 3 and v not in ("홍천", "치과", "한의원")}
 
 
 def match_hospital(query: str | None, dept: str | None = None, home_town: str | None = None,
@@ -177,20 +199,37 @@ def match_hospital(query: str | None, dept: str | None = None, home_town: str | 
     by_name = {h.name: h for h in hospitals()}
     dept = dept or detect_department(query)
 
-    def result(status: str, found: list[Hospital]) -> dict:
-        return {"query": query, "department": dept, "status": status,
+    def result(status: str, found: list[Hospital], basis: str = "name") -> dict:
+        # basis: name(기관 이름·별명을 말함) / department(이름 없이 진료과로 고름) / place(보건소·도시로 고름)
+        return {"query": query, "department": dept, "status": status, "basis": basis if found else None,
                 "candidates": [{"id": h.id, "name": h.name, "kind": h.kind, "town": h.town or h.sigungu,
                                 "far": h.far} for h in found[:5]]}
 
     if not q and not dept:
         return result("unknown", [])
+
+    # 1) 기관 이름이나 별명을 말한 경우. 두 곳 이상 말하면("A인지 B인지") 후보로 둔다.
+    spans: list[tuple[int, int, Hospital]] = []
+    for h in hospitals():
+        for v in _name_variants(h):
+            i = q.find(v)
+            if i >= 0:
+                spans.append((i, i + len(v), h))
+    seoul = "서울" in q
+    for alias, target in ALIASES.items():
+        if seoul and any(k in alias for k in SEOUL_BIG):  # '서울 아산병원'은 홍천아산병원이 아니다
+            continue
+        i = q.find(alias)
+        if i >= 0:
+            spans.append((i, i + len(alias), by_name[target]))
+    # 더 긴 이름 안에 든 짧은 이름은 버린다('홍천치과의원' 안의 '치과' 같은 것)
+    spans = [a for a in spans if not any(b[0] <= a[0] and a[1] <= b[1] and (b[1] - b[0]) > (a[1] - a[0])
+                                         for b in spans)]
+    found = list({h.id: h for _, _, h in sorted(spans, key=lambda x: x[0])}.values())
+    if found:
+        return result("matched" if len(found) == 1 else "candidates", found)
     if "서울" in q and any(k in q for k in SEOUL_BIG):  # 서울 큰 병원은 목록 밖이다
         return result("unknown", [])
-
-    # 1) 기관 이름이나 별명을 말한 경우
-    for alias in sorted(ALIASES, key=len, reverse=True):
-        if alias in q:
-            return result("matched", [by_name[ALIASES[alias]]])
     named = [h for h in hospitals() if len(_core(h.name)) >= 2 and _core(h.name) in q]
     if named:
         named.sort(key=lambda h: len(_core(h.name)), reverse=True)
@@ -203,14 +242,14 @@ def match_hospital(query: str | None, dept: str | None = None, home_town: str | 
         found = [h for h in hospitals() if h.kind == "보건진료소"
                  and (h.name.removesuffix("보건진료소")[-2:] in q
                       or (home_core and h.name.removesuffix("보건진료소").endswith(home_core)))]
-        return result("matched" if len(found) == 1 else ("candidates" if found else "unknown"), found)
+        return result("matched" if len(found) == 1 else ("candidates" if found else "unknown"), found, "place")
     home_branch = [h for h in hospitals() if h.kind == "보건지소" and home_town and home_town in h.name]
     if "보건지소" in q and home_branch:
-        return result("matched", home_branch)
+        return result("matched", home_branch, "place")
     if "보건소" in q:
         if home_branch and "읍내" not in q:  # 면에 사는 어르신의 '보건소'는 면 보건지소일 수 있다
-            return result("candidates", home_branch + [by_name["홍천군보건소"]])
-        return result("matched", [by_name["홍천군보건소"]])
+            return result("candidates", home_branch + [by_name["홍천군보건소"]], "place")
+        return result("matched", [by_name["홍천군보건소"]], "place")
 
     # 3) 진료과와 지역으로 좁히기
     city = next((v for k, v in CITY_WORDS.items() if k in q), None)
@@ -218,11 +257,12 @@ def match_hospital(query: str | None, dept: str | None = None, home_town: str | 
         pool = [h for h in hospitals() if h.far and h.sigungu == city]
         if dept:
             pool = [h for h in pool if _has_dept(h, dept)] or pool
-        return result("matched" if len(pool) == 1 else ("candidates" if pool else "unknown"), pool)
+        return result("matched" if len(pool) == 1 else ("candidates" if pool else "unknown"), pool, "place")
 
     if not dept:
         return result("unknown", [])
-    pool = [h for h in hospitals() if not h.far and h.kind in ("의원", "병원", "종합병원", "한의원", "치과의원")]
+    pool = [h for h in hospitals() if not h.far and h.kind in ("의원", "병원", "종합병원", "한의원", "치과의원")
+            and not any(w in h.name for w in CLOSED_TO_PUBLIC)]
     town = "홍천읍" if ("읍내" in q or not home_town) else home_town
     local = [h for h in pool if h.town == town and _has_dept(h, dept)]
     if not local:
@@ -232,7 +272,7 @@ def match_hospital(query: str | None, dept: str | None = None, home_town: str | 
     local = sorted(specialty or local, key=lambda h: h.name)
     if not local:
         return result("unknown", [])
-    return result("matched" if len(local) == 1 else "candidates", local)
+    return result("matched" if len(local) == 1 else "candidates", local, "department")
 
 
 # ── 마을 ───────────────────────────────────────────────
@@ -242,10 +282,21 @@ def match_village(text: str | None) -> Village | None:
     s = re.sub(r"\s+", "", text or "")
     if not s:
         return None
+    vs = villages()
+    # 1) 리 이름을 그대로 말한 경우. 긴 이름 안에 든 짧은 이름('능평리' 안의 '평리')은 버린다.
+    full = [v for v in vs if v.name in s]
+    full = [v for v in full if not any(o.name != v.name and v.name in o.name for o in full)]
+    if full:
+        in_town = [v for v in full if v.town in s]
+        return max(in_town or full, key=lambda v: len(v.name))
+    # 2) 줄여 말한 경우('수하 사는데'). 읍·면 이름 속 글자('북방면'의 '북방')로는 맞추지 않는다.
+    t = s
+    for town in sorted({v.town for v in vs}, key=len, reverse=True):
+        t = t.replace(town, " ")
     best = None
-    for v in villages():
+    for v in vs:
         core = v.name.removesuffix("리")
-        if len(core) >= 2 and (v.name in s or core in s):
+        if len(core) >= 2 and core in t:
             if best is None or len(core) > len(best.name.removesuffix("리")):
                 best = v
     return best
