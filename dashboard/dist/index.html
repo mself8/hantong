@@ -128,7 +128,9 @@
   .app .notes li::before { content: "• "; color: var(--warn-line); font-weight: 700; }
   .respond { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 8px; }
   .respond .rl { font-size: 14px; color: var(--text-3); }
-  .regform { margin-top: 10px; }
+  .dl { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: var(--text-2); flex-wrap: wrap; }
+  .regform { margin: 12px 0 0; }
+  .btn.sm { height: 34px; padding: 0 12px; font-size: 14px; }
   .respond .other:not([hidden]) { display: flex; gap: 8px; }
   .respond .other input { flex: 1; min-width: 0; }
   .replies { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -227,9 +229,9 @@ async function act(path, body, method, done) {
   } catch (e) { toast(e.message); return false; }
 }
 // 값을 채운 신청서 묶음(통합지원 신청서 + 기관별 신청서) PDF를 내려받는다
-function download(id, kind) {
+function download(id, kind, fmt) {
   const a = document.createElement("a");
-  a.href = `/api/requests/${encodeURIComponent(id)}/forms/${kind}.pdf`; a.download = "";
+  a.href = `/api/requests/${encodeURIComponent(id)}/forms/${kind}.${fmt === "docx" ? "docx" : "pdf"}`; a.download = "";
   document.body.appendChild(a); a.click(); a.remove();
 }
 
@@ -284,6 +286,10 @@ function action(r) {
 
 const FLAG = { check: "확인 필요", missing: "모름" };
 // 맨 위 칸 하나: 값은 늘 보여 주고, 믿기 어려우면 '확인 필요'·'모름' 표시와 이유를 단다(판정은 서버의 facts)
+// 공식 신청서 한 장: PDF(인쇄용)와 워드(고쳐 쓰기용)
+function formButtons(label, kind, cls) {
+  return `<span class="${cls}">${label}<button class="btn sm" data-act="form" data-kind="${kind}" data-fmt="pdf">PDF</button><button class="btn sm" data-act="form" data-kind="${kind}" data-fmt="docx">워드</button></span>`;
+}
 function tile(k, x, extra = "") {
   if (!x) return "";
   const lv = x.level || "ok";
@@ -318,11 +324,11 @@ function renderDetail() {
     return `<article class="app"><div class="app-h"><div class="n"><b>${esc(a.label)}</b><span>${esc(a.agency)} · <span class="num">${esc(a.contact)}</span></span></div>
         ${badge(a.status === "draft" ? "draft" : a.status, APP_STATUS[a.status] || a.status)}</div>
       <dl class="kv">${main}</dl>${notes ? `<ul class="notes">${notes}</ul>` : ""}
-      ${a.type === "special_transport" && r.needs_registration ? `<button class="linkbtn regform" data-act="form" data-kind="special_transport">특별교통수단 등록 신청서 PDF ↓</button>` : ""}
+      ${a.type === "special_transport" && r.needs_registration ? formButtons("특별교통수단 등록 신청서", "special_transport", "dl regform") : ""}
       ${resp}</article>`;
   }).join("");
   const appsPart = `<section class="part"><h3>기관에 요청할 것 <span class="cnt">${(r.applications || []).length}건</span>
-      <button class="btn" style="margin-left:auto;height:38px;font-size:15px" data-act="form" data-kind="integrated">통합지원 신청서 PDF</button></h3>
+      ${formButtons("통합지원 신청서", "integrated", "dl")}</h3>
     ${apps ? `<div class="apps">${apps}</div>` : `<p class="note">기관에 요청할 것이 없는 건이에요.</p>`}</section>`;
 
   const m = r.message;
@@ -370,7 +376,7 @@ document.addEventListener("click", (e) => {
   const base = `/api/requests/${encodeURIComponent(current.id)}`;
   switch (t.dataset.act) {
     case "submit": act(`${base}/submit`, null, "POST", "기관에 요청했다고 기록했어요"); break;
-    case "form": download(current.id, t.dataset.kind); break;
+    case "form": download(current.id, t.dataset.kind, t.dataset.fmt); break;
     case "send": act(`${base}/message/send`, null, "POST", "안내 문자를 보냈어요 (시연: 발송 기록)"); break;
     case "editmsg": editMsg = true; renderDetail(); break;
     case "cancelmsg": editMsg = false; renderDetail(); break;

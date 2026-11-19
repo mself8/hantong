@@ -308,3 +308,18 @@ def test_wheelchair_means_special_transport():
     f = client.get(f"/api/requests/{rid}").json()["facts"]
     assert f["transport"]["value"] == "특별교통수단" and f["time"]["value"] == "10:00"
     assert f["place"] == {"value": "서석면 풍암리", "sub": "마을회관 앞", "level": "ok", "why": None}
+
+
+def test_official_forms_as_word():
+    from docx import Document
+    import io
+    body = report(dict(FIELDS, wheelchair_needed="yes", caller_name="한옥순"))
+    rid = client.post("/vapi/webhook", json=body).json()["id"]
+    for kind in ("integrated", "special_transport"):
+        r = client.get(f"/api/requests/{rid}/forms/{kind}.docx")
+        assert r.status_code == 200 and "wordprocessingml" in r.headers["content-type"]
+        doc = Document(io.BytesIO(r.content))
+        text = "\n".join(c.text for t in doc.tables for row in t.rows for c in row.cells)
+        assert "한옥순" in text and rid in text
+    assert "[√] 대상자 본인" in "\n".join(c.text for row in Document(io.BytesIO(
+        client.get(f"/api/requests/{rid}/forms/integrated.docx").content)).tables[0].rows for c in row.cells)

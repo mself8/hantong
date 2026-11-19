@@ -299,6 +299,19 @@ def official_form(rid: str, kind: str) -> Response:
                     headers={"Content-Disposition": f"attachment; filename=\"{kind}_{rid}.pdf\"; filename*=UTF-8''{quote(name)}"})
 
 
+@app.get("/api/requests/{rid}/forms/{kind}.docx")
+def official_form_word(rid: str, kind: str) -> Response:
+    """공식 신청서 한 장을 워드(.docx)로. 공무원이 워드에서 고쳐 쓸 수 있다."""
+    from . import wordforms
+    req = store.get(rid)
+    if not req or kind not in wordforms.WORD_FORMS:
+        raise HTTPException(status_code=404, detail="없는 신청서")
+    title, render = wordforms.WORD_FORMS[kind]
+    name = f"{title.replace(' ', '')}_{rid}.docx"
+    return Response(render(req), media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    headers={"Content-Disposition": f"attachment; filename=\"{kind}_{rid}.docx\"; filename*=UTF-8''{quote(name)}"})
+
+
 @app.get("/view", response_class=HTMLResponse)
 def view_page() -> str:
     """신청서·안내문 확인용 읽기 전용 화면 (대시보드와 별개로 항상 열린다)."""
