@@ -226,12 +226,18 @@ async function act(path, body, method, done) {
   try {
     current = await api(path, { method, body: body ? JSON.stringify(body) : undefined });
     editing = false; editMsg = false;
-    if (done) toast(done);
-    await loadList(); renderDetail();
+    // 상태가 바뀌어 지금 필터에서 빠지면, 필터가 그 상태를 따라가서 이 요청이 목록에 계속 보이게 한다
+    let moved = "";
+    if (tab !== "all" && current.status !== tab) {
+      tab = TABS.some(([k]) => k === current.status) ? current.status : "all";
+      moved = ` · 목록을 '${(TABS.find(([k]) => k === tab) || [, "전체"])[1]}'(으)로 옮겼어요`;
+    }
+    if (done) toast(done + moved);
+    await loadList(); renderTabs(); renderList(); renderDetail();
     return true;
   } catch (e) { toast(e.message); return false; }
 }
-// 값을 채운 신청서 묶음(통합지원 신청서 + 기관별 신청서) PDF를 내려받는다
+// 공식 신청서 한 장(PDF 또는 워드)을 내려받는다
 function download(id, kind, fmt) {
   const a = document.createElement("a");
   a.href = `/api/requests/${encodeURIComponent(id)}/forms/${kind}.${fmt === "docx" ? "docx" : "pdf"}`; a.download = "";
