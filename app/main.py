@@ -22,6 +22,15 @@ load_dotenv()  # 로컬에서만 .env를 읽는다. Railway는 환경변수를 �
 
 app = FastAPI(title="한 통이면 돼유")
 log = logging.getLogger("uvicorn.error")
+
+
+@app.middleware("http")
+async def no_cache_html(request: Request, call_next):
+    """화면(HTML)은 브라우저가 저장해 둔 옛 판을 쓰지 않고 늘 새로 확인하게 한다."""
+    resp = await call_next(request)
+    if resp.headers.get("content-type", "").startswith("text/html"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 STATUSES = {"processing": "정리 중", "pending": "확인 대기", "submitted": "기관 회신 대기",
