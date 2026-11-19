@@ -17,7 +17,7 @@ from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import bus, kakao, live, pipeline, store, view, workflow
+from . import address, bus, kakao, live, pipeline, store, view, workflow
 from .data import hospitals, villages, voice_cards
 
 mimetypes.add_type("font/woff2", ".woff2")  # 글꼴 파일을 글꼴 형식으로 내보낸다
@@ -77,16 +77,29 @@ def _find_date(args: dict) -> str:
     return f"{d.month}월 {d.day}일 {wd}요일({when})." + (" " + ". ".join(notes) + "." if notes else "")
 
 
-TOOLS = {"bus_guide": _bus_guide, "find_date": _find_date}
+# 통화마다 마지막으로 확인한 주소. 통화가 끝나면 신청서 주소로 쓴다(대화를 다시 읽은 값보다 정확하다).
+ADDRESS: dict[str, dict] = {}
+
+
+def _check_address(args: dict, call_id: str | None = None) -> str:
+    """어르신이 말한 주소를 마을 목록과 맞춰 본다(없는 리·다른 면의 리·마을 번호)."""
+    r = address.check(str(args.get("said") or args.get("address") or ""))
+    if r["status"] == "ok" and call_id:
+        ADDRESS[call_id] = {"village": r["village"], "detail": r["detail"]}
+    return r["message"]
+
+
+TOOLS = {"bus_guide": lambda a, c: _bus_guide(a), "find_date": lambda a, c: _find_date(a), "check_address": _check_address}
 
 
 @app.post("/vapi/tools")
 async def vapi_tools(request: Request) -> dict:
-    """통화 중에 AI가 부르는 도구(버스 안내, 날짜 찾기). Vapi는 늘 200과 results를 기다린다."""
+    """통화 중에 AI가 부르는 도구(버스 안내, 날짜 찾기, 주소 확인). Vapi는 늘 200과 results를 기다린다."""
     body = await request.json()
     if "message" not in body:  # 대시보드 시험 버튼은 받을 값만 그대로 보낸다
-        return {"result": _find_date(body) if "expr" in body else _bus_guide(body)}
+        return {"result": _find_date(body) if "expr" in body else _check_address(body) if "said" in body else _bus_guide(body)}
     results = []
+    call_id = ((body.get("message") or {}).get("call") or {}).get("id")
     for call in (body.get("message") or {}).get("toolCallList") or []:
         fn = call.get("function") or {}
         args = fn.get("arguments") or {}
@@ -96,7 +109,7 @@ async def vapi_tools(request: Request) -> dict:
             except ValueError:
                 args = {}
         tool = TOOLS.get(fn.get("name"))
-        results.append({"toolCallId": call.get("id"), "result": tool(args)} if tool else
+        results.append({"toolCallId": call.get("id"), "result": tool(args, call_id)} if tool else
                        {"toolCallId": call.get("id"), "error": f"모르는 도구: {fn.get('name')}"})
     return {"results": results}
 
@@ -120,6 +133,9 @@ async def vapi_webhook(request: Request, bg: BackgroundTasks,
         live.finish(msg, None, turns)
         return {"ok": True, "skipped": "어르신 말이 없는 통화"}
     prefill = pipeline.vapi_structured(msg)
+    checked = ADDRESS.pop((msg.get("call") or {}).get("id"), None)
+    if checked and prefill:  # 통화 중 서버가 확인한 마지막 주소를 쓴다(AI가 '청량2리'를 '청량1리'로 베낀 일이 있었다)
+        prefill.update(village=checked["village"], address_detail=checked["detail"])
     # 첫 통화 점검용: 내용은 남기지 않고 어떤 칸이 왔는지만 남긴다
     log.info("vapi report: artifact=%s structured=%s", sorted((msg.get("artifact") or {}).keys()), bool(prefill))
     req = pipeline.new_request(turns, source="phone", call=call, caller=caller, prefill=prefill)
