@@ -97,3 +97,6 @@ def test_report_replaces_live_turns_and_fixes_name():
 
 def test_service_name_fixed_even_when_split_by_punctuation():
     assert live.fix_name("안녕하세요, 홍천. 한통이. 면 대유 AI 상담원입니다.") == "안녕하세요, 홍천. '한 통이면 돼유' AI 상담원입니다."
+    # 첫인사는 사투리 느낌으로 끝을 끈다('돼유우~'). 화면에는 이름만 깔끔하게 보인다.
+    assert live.fix_name("안녕하세요. 한 통이면 돼유우~ AI 상담원입니다.") == "안녕하세요. '한 통이면 돼유' AI 상담원입니다."
+    assert live.fix_name("안녕하세요. 한통이면 되유우 AI 상담원입니다.") == "안녕하세요. '한 통이면 돼유' AI 상담원입니다."
