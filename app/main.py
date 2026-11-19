@@ -15,7 +15,7 @@ from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import live, pipeline, store, view
+from . import live, pipeline, store, view, workflow
 from .data import hospitals, villages, voice_cards
 
 mimetypes.add_type("font/woff2", ".woff2")  # 글꼴 파일을 글꼴 형식으로 내보낸다
@@ -114,9 +114,14 @@ def create_from_text(body: TextIn) -> dict:
     return pipeline.process(req["id"])
 
 
+def _out(req: dict) -> dict:
+    """화면에 보낼 신청 한 건. 맨 위 여섯 칸(값과 '확인 필요' 표시)은 읽을 때마다 새로 계산한다."""
+    return {**req, "facts": workflow.facts(req)}
+
+
 @app.get("/api/requests")
 def list_requests(status: str | None = None) -> list[dict]:
-    return store.list_all(status)
+    return [_out(r) for r in store.list_all(status)]
 
 
 @app.get("/api/requests/{rid}")
@@ -124,7 +129,7 @@ def get_request(rid: str) -> dict:
     req = store.get(rid)
     if not req:
         raise HTTPException(status_code=404, detail="없는 신청서")
-    return req
+    return _out(req)
 
 
 class HospitalIn(BaseModel):
@@ -146,7 +151,7 @@ class MessageIn(BaseModel):
 
 def _run(fn, *args):
     try:
-        return fn(*args)
+        return _out(fn(*args))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=f"찾을 수 없어요: {e}")
     except pipeline.FlowError as e:
@@ -194,7 +199,7 @@ def hold(rid: str, body: DecisionIn | None = None) -> dict:
     req = pipeline.decide(rid, "held", body.memo if body else "")
     if not req:
         raise HTTPException(status_code=404, detail="없는 신청서")
-    return req
+    return _out(req)
 
 
 @app.get("/api/statuses")
@@ -272,16 +277,6 @@ def application_bundle(rid: str) -> Response:
     name = f"신청서_{rid}.pdf"
     return Response(pdfforms.bundle(req), media_type="application/pdf",
                     headers={"Content-Disposition": f"attachment; filename=\"forms_{rid}.pdf\"; filename*=UTF-8''{quote(name)}"})
-
-
-@app.get("/forms/{rid}/{aid}", response_class=HTMLResponse)
-def application_form(rid: str, aid: str) -> str:
-    """기관별 신청서 한 장을 인쇄용 양식으로 보여 준다."""
-    req = store.get(rid)
-    app_ = next((a for a in (req or {}).get("applications") or [] if a["id"] == aid), None)
-    if not app_:
-        raise HTTPException(status_code=404, detail="없는 신청서")
-    return view.form_page(req, app_)
 
 
 @app.get("/view", response_class=HTMLResponse)

@@ -66,7 +66,7 @@ def test_vapi_call_to_confirmation_message():
     day = date.fromisoformat(req["visit"]["date"])
     assert req["summary"].startswith(f"{day.month}월 {day.day}일(") and req["summary"].endswith("읍내 정형외과 · 동행 필요")
 
-    # 수하리는 확인된 희망택시 마을이 아니고 휠체어도 필요 없어서 병원동행 신청서 하나만 만든다
+    # 수하리는 확인된 희망택시 마을이 아니고 휠체어도 필요 없어서 병원동행 요청 하나만 만든다
     assert [a["type"] for a in req["applications"]] == ["companion"]
     app = req["applications"][0]
     assert app["status"] == "draft" and app["fields"]["어르신"] == "한○○"
@@ -211,7 +211,7 @@ def test_view_page_shows_forms_and_message():
     client.post(f"/api/requests/{rid}/applications/A1/respond",
                 json={"result": "confirmed", "detail": "동행 매니저가 9시에 찾아갑니다.<b>"})
     html = client.get("/view").text
-    assert "병원동행 신청서" in html and "어르신께 보낼 안내문" in html
+    assert "병원동행 예약" in html and "어르신께 보낼 안내문" in html
     assert "동행 매니저가 9시에 찾아갑니다.&lt;b&gt;" in html  # 값은 이스케이프해서 보여 준다
     assert client.get("/").status_code == 200
 
@@ -238,13 +238,6 @@ def test_unheard_village_and_changed_date_are_flagged(monkeypatch):
     assert req["hospital"]["department"] == "내과" and req["hospital"]["basis"] == "department"
 
 
-def test_application_form_page():
-    rid = client.post("/vapi/webhook", json=report()).json()["id"]
-    html = client.get(f"/forms/{rid}/A1").text
-    assert "병원동행 신청서" in html and "제출처" in html and "인쇄하기" in html
-    assert client.get(f"/forms/{rid}/A9").status_code == 404
-
-
 def test_pdf_bundle_has_official_forms():
     import fitz
     body = report(dict(FIELDS, wheelchair_needed="yes"))
@@ -253,8 +246,8 @@ def test_pdf_bundle_has_official_forms():
     assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
     doc = fitz.open(stream=r.content, filetype="pdf")
     text = "".join(p.get_text() for p in doc)
-    # 통합지원 신청서 2쪽 + 기관 신청서 2장(병원동행, 특별교통수단) + 미등록이라 등록 신청서 4쪽
-    assert doc.page_count == 8, doc.page_count
+    # 공식 양식만: 통합지원 신청서 2쪽 + 특별교통수단 미등록이라 등록 신청서 4쪽 (우리가 만든 양식은 넣지 않는다)
+    assert doc.page_count == 6, doc.page_count
     assert "통합지원" in text and "한○○" in text and "등록 신청서" in text
 
 
@@ -267,3 +260,25 @@ def test_agency_other_reply_is_kept_as_memo():
     assert app_["status"] == "submitted" and app_["replies"][0]["note"] == "날짜를 하루 미뤄 달래요"  # 기타는 상태를 바꾸지 않는다
     assert client.post(path, json={"result": "note", "detail": " "}).status_code == 409
     assert client.post(path, json={"result": "confirmed"}).json()["applications"][0]["status"] == "confirmed"
+
+
+def test_tiles_always_have_a_value_and_say_how_sure():
+    rid = client.post("/vapi/webhook", json=report()).json()["id"]
+    f = client.get(f"/api/requests/{rid}").json()["facts"]
+    assert f["date"]["level"] == "ok" and f["date"]["sub"] == "담주 화요일"        # 말한 표현을 규칙으로 계산한 날짜
+    assert f["time"] == {"value": "모름", "sub": "", "level": "missing", "why": "통화에서 진료 시각이 나오지 않았어요"}
+    assert f["hospital"]["level"] == "check" and f["hospital"]["value"]             # 후보가 있으면 첫 후보를 보여 준다
+    assert f["place"]["level"] == "check" and f["place"]["why"] == "명부와 마을이 달라요"
+    assert f["transport"]["level"] == "check"                                       # 마을이 엇갈리면 교통수단도 확인 필요
+    assert f["companion"] == {"value": "병원동행", "sub": "같이 가 드릴 분 필요", "level": "ok", "why": None}
+    hid = client.get(f"/api/requests/{rid}").json()["hospital"]["candidates"][0]["id"]
+    f = client.post(f"/api/requests/{rid}/hospital", json={"hosp_id": hid}).json()["facts"]
+    assert f["hospital"]["level"] == "ok"                                           # 공무원이 고르면 확인 끝
+
+
+def test_wheelchair_means_special_transport():
+    structured = {**FIELDS, "wheelchair_needed": "yes", "village": "풍암리", "address_detail": "마을회관 앞", "time_expr": "오전 10시"}
+    rid = client.post("/vapi/webhook", json=report(structured)).json()["id"]
+    f = client.get(f"/api/requests/{rid}").json()["facts"]
+    assert f["transport"]["value"] == "특별교통수단" and f["time"]["value"] == "10:00"
+    assert f["place"] == {"value": "서석면 풍암리", "sub": "마을회관 앞", "level": "ok", "why": None}

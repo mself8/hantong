@@ -278,7 +278,7 @@ def choose_hospital(rid: str, hosp_id: str) -> dict:
     h = hospital_by_id().get(hosp_id)
     if not h:
         raise KeyError(hosp_id)
-    req["hospital"] = {**(req.get("hospital") or {}), "status": "matched",
+    req["hospital"] = {**(req.get("hospital") or {}), "status": "matched", "basis": "officer",  # 공무원이 고른 병원
                        "candidates": [{"id": h.id, "name": h.name, "kind": h.kind,
                                        "town": h.town or h.sigungu, "far": h.far}]}
     today = date.fromisoformat(req["created_at"][:10])
@@ -316,7 +316,7 @@ def submit_application(rid: str, aid: str | None = None) -> dict:
     for a in targets:
         a["status"] = "submitted"
         a["history"].append(_event("submitted", f"{a['agency']}에 제출"))
-    req["history"].append(_event(req["status"], "신청서 제출: " + ", ".join(a["label"] for a in targets)))
+    req["history"].append(_event(req["status"], "기관에 요청: " + ", ".join(a["label"] for a in targets)))
     refresh_status(req)
     return store.save(req)
 

@@ -1,8 +1,8 @@
 """신청 한 건을 기관에 낼 PDF 묶음으로 만든다.
 
 1. 통합지원 신청서 (공식 양식 위에 값 채움)
-2. 기관별 신청서 (병원동행·희망택시·특별교통수단: 주민용 공식 양식이 없어 우리 양식)
-3. 특별교통수단 미등록(또는 미확인) 휠체어 어르신이면 홍천군 등록 신청서 (공식 양식 위에 값 채움)
+2. 특별교통수단 미등록(또는 미확인) 휠체어 어르신이면 홍천군 등록 신청서 (공식 양식 위에 값 채움)
+병원동행(노인복지관 전화 예약)과 희망택시(이장이 전화로 요청)는 주민용 공식 신청서가 없어 PDF에 넣지 않는다.
 
 칸 위치는 양식의 글자 위치(PyMuPDF search_for)로 찾은 좌표다. 양식 원본은 app/forms/README.md 참고.
 """
@@ -108,54 +108,10 @@ def special_transport_form(doc: fitz.Document, req: dict) -> None:
     _put(p4, 340, 200, name, 11)
 
 
-def agency_form(doc: fitz.Document, req: dict, app: dict) -> None:
-    """공식 주민용 양식이 없는 기관 신청서를 한 장으로 그린다."""
-    page = doc.new_page(width=595, height=842)
-    _fonts(page)
-    font = fitz.Font(fontfile=FONT)
-    page.insert_text((50, 70), app["label"], fontname="PB", fontsize=20)
-    page.insert_text((50, 92), f"제출처: {app['agency']} ({app['contact']})", fontname="P", fontsize=11, color=GRAY)
-    page.insert_text((50, 110), f"접수번호 {req['id']}-{app['id']} · 접수일 {_day(req).isoformat()} · 작성: 한 통이면 돼유(AI 초안)",
-                     fontname="P", fontsize=9, color=GRAY)
-    page.draw_line((50, 120), (545, 120), color=(0.12, 0.13, 0.14), width=1.2)
-
-    y, left, mid, right = 132, 50, 190, 545
-    rows = list((app.get("fields") or {}).items())
-    for k, v in rows:
-        v = str(v)
-        width = right - mid - 16
-        lines = max(1, int(font.text_length(v, 11) // width) + 1 + v.count("\n"))
-        h = 12 + 15 * lines
-        page.draw_rect(fitz.Rect(left, y, mid, y + h), color=(0.6, 0.64, 0.68), fill=(0.96, 0.96, 0.97), width=0.6)
-        page.draw_rect(fitz.Rect(mid, y, right, y + h), color=(0.6, 0.64, 0.68), width=0.6)
-        page.insert_textbox(fitz.Rect(left + 8, y + 6, mid - 6, y + h), k, fontname="PB", fontsize=11)
-        page.insert_textbox(fitz.Rect(mid + 8, y + 6, right - 8, y + h + 4), v, fontname="P", fontsize=11, color=INK)
-        y += h
-    notes = app.get("notes") or []
-    if notes:
-        y += 18
-        page.insert_text((50, y), "담당자 확인 사항", fontname="PB", fontsize=12)
-        for n in notes:
-            y += 6
-            r = fitz.Rect(58, y, right, y + 15 * (int(font.text_length(n, 10) // (right - 70)) + 1) + 4)
-            page.insert_textbox(r, "· " + n, fontname="P", fontsize=10, color=(0.25, 0.27, 0.3))
-            y = r.y1
-    y = max(y + 30, 690)
-    for i, label in enumerate(("읍·면 담당자 확인", "기관 접수 확인")):
-        box = fitz.Rect(50 + i * 252, y, 293 + i * 252, y + 70)
-        page.draw_rect(box, color=(0.6, 0.64, 0.68), width=0.6)
-        page.insert_text((box.x0 + 10, box.y0 + 20), label, fontname="P", fontsize=10)
-        page.insert_text((box.x0 + 10, box.y0 + 55), "성명:                       (서명)", fontname="P", fontsize=10, color=GRAY)
-    page.insert_text((50, 800), "이 신청서는 어르신 전화 내용을 AI가 정리한 초안입니다. 담당 공무원이 확인한 뒤 제출합니다. "
-                     "AI는 진단·자격 판정을 하지 않습니다.", fontname="P", fontsize=7.5, color=GRAY)
-
-
 def bundle(req: dict) -> bytes:
     doc = fitz.open()
     integrated_form(doc, req)
     apps = req.get("applications") or []
-    for app in apps:
-        agency_form(doc, req, app)
     needs_registration = any(a["type"] == "special_transport" for a in apps) and \
         (req.get("resident") or {}).get("special_transport") is not True
     if needs_registration:

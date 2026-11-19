@@ -13,11 +13,11 @@ from functools import lru_cache
 from .data import DATA, WEEKDAYS
 
 AGENCIES = {
-    "companion": {"label": "병원동행 신청서", "agency": "홍천군노인복지관", "contact": "033-430-8753"},
-    "hope_taxi": {"label": "희망택시 운행 요청서", "agency": "면사무소 희망택시 담당", "contact": "033-430-2975"},
-    "special_transport": {"label": "특별교통수단 이용 신청서", "agency": "광역이동지원센터", "contact": "1577-2014"},
+    "companion": {"label": "병원동행 예약", "agency": "홍천군노인복지관", "contact": "033-430-8753"},
+    "hope_taxi": {"label": "희망택시 운행 요청", "agency": "면사무소 희망택시 담당", "contact": "033-430-2975"},
+    "special_transport": {"label": "특별교통수단 예약", "agency": "광역이동지원센터", "contact": "1577-2014"},
 }
-APP_STATUSES = {"draft": "작성됨", "submitted": "제출함", "confirmed": "확정", "rejected": "불가"}
+APP_STATUSES = {"draft": "요청 전", "submitted": "요청함", "confirmed": "확정", "rejected": "불가"}
 # 어르신이 내는 요금. 출처: 병원동행 = 아시아경제 2026-01-15·홍천군노인복지관 안내, 희망택시 = 조례 제4조②·홍천 농어촌버스 요금표,
 # 특별교통수단 = 공공데이터포털 교통약자 이동지원센터 표준데이터(2023-10-05)
 COMPANION_FEE = {True: "첫 1시간 1,000원, 이후 30분마다 500원(기초수급·차상위). 차비는 따로예요",
@@ -61,6 +61,81 @@ def _hospital_label(req: dict) -> str:
     if cands:
         return "확인 필요 (후보: " + ", ".join(c["name"] for c in cands) + ")"
     return "확인 필요"
+
+
+def _transport(req: dict, from_call: bool) -> dict:
+    """교통수단: 통화에서 받은 휠체어 여부와 사는 마을로 정한다(어르신께 따로 묻지 않는다)."""
+    p, res = req.get("pickup") or {}, req.get("resident") or {}
+    if req.get("wheelchair_needed") == "yes":
+        reg = {True: "등록됨", False: "미등록이라 등록 필요"}.get(res.get("special_transport"), "등록 여부 확인")
+        return {"value": "특별교통수단", "sub": f"휠체어 차량 · {reg}", "level": "ok"}
+    card = {True: "교통복지카드 있음(월 20회 무료)", False: "교통복지카드 없음"}.get(res.get("bus_card"), "교통복지카드 확인")
+    if not p.get("village"):
+        return {"value": "농어촌버스", "sub": card, "level": "check", "why": "사는 곳을 몰라 교통수단을 정하지 못했어요"}
+    roster = None if from_call else "명부 마을로 정한 교통수단이에요"
+    taxi = _hope_taxi_match(p["village"])
+    if taxi:
+        town = taxi["읍면"]
+        return {"value": "희망택시", "sub": "읍내 병원까지" if town == "홍천읍" else f"{town} 소재지까지, 이후 버스",
+                "level": "check" if roster else "ok", "why": roster}
+    return {"value": "농어촌버스", "sub": card, "level": "check" if roster else "ok", "why": roster}
+
+
+def facts(req: dict) -> dict:
+    """대시보드 맨 위 여섯 칸. 값은 늘 채우고, 믿을 만한 정도는 점수가 아니라 값이 어디서 왔는지로 정한다.
+    ok = 어르신이 말했거나 상담원 제안에 동의한 값(날짜는 규칙 계산이 AI 계산과 같을 때)
+    check = 우리가 고른 값(아픈 곳으로 고른 병원, 명부 마을), 계산이 엇갈린 날짜, '오후쯤'처럼 하나로 안 정해진 말
+    missing = 통화에서 아예 안 나온 값. 지어내지 않는다."""
+    v, h, p = req.get("visit") or {}, req.get("hospital") or {}, req.get("pickup") or {}
+    checks = {c["type"] for c in req.get("checks") or []}
+    f: dict[str, dict] = {}
+
+    if v.get("date"):
+        why = ("통화에서 확인한 날짜와 계산이 엇갈려요" if "date_mismatch" in checks
+               else None if v.get("date_source") == "rule" else "AI가 계산한 날짜예요")
+        label, expr = _date_label(v["date"]), v.get("date_expr") or ""
+        f["date"] = {"value": label, "sub": "" if label.startswith(expr) else expr,  # '11월 26일'처럼 같은 말은 다시 쓰지 않는다
+                     "level": "check" if why else "ok", "why": why}
+    elif v.get("date_expr"):
+        f["date"] = {"value": v["date_expr"], "sub": "", "level": "check", "why": "날짜 하나로 정해지지 않았어요"}
+    else:
+        f["date"] = {"value": "모름", "sub": "", "level": "missing", "why": "통화에서 날짜가 나오지 않았어요"}
+
+    if v.get("time"):
+        f["time"] = {"value": v["time"], "sub": "", "level": "ok"}
+    elif v.get("time_expr"):
+        f["time"] = {"value": v["time_expr"], "sub": "", "level": "check", "why": "시각 하나로 정해지지 않았어요"}
+    else:
+        f["time"] = {"value": "모름", "sub": "", "level": "missing", "why": "통화에서 진료 시각이 나오지 않았어요"}
+
+    cands = h.get("candidates") or []
+    if cands:
+        sure = h.get("status") == "matched" and h.get("basis") != "department"
+        why = None if sure else ("아픈 곳으로 고른 병원이에요" if h.get("basis") == "department"
+                                 else f"후보 {len(cands)}곳 가운데 첫 번째예요")
+        f["hospital"] = {"value": cands[0]["name"], "sub": "관외" if cands[0].get("far") else (h.get("department") or ""),
+                         "level": "ok" if sure else "check", "why": why}
+    else:
+        f["hospital"] = {"value": "모름", "sub": h.get("department") or "", "level": "missing", "why": "통화에서 병원이 나오지 않았어요"}
+
+    from_call = bool(p.get("village")) and not checks & {"village_from_roster", "village_mismatch"}
+    f["transport"] = _transport(req, from_call)
+
+    need = (req.get("companion") or {}).get("needed")
+    f["companion"] = {"value": {"yes": "병원동행", "no": "필요 없음"}.get(need, "모름"),
+                      "sub": {"yes": "같이 가 드릴 분 필요", "no": "혼자 가실 수 있음"}.get(need, ""),
+                      "level": "ok" if need in ("yes", "no") else "check",
+                      "why": None if need in ("yes", "no") else "동행이 필요한지 듣지 못했어요"}
+
+    if p.get("village"):
+        why = ("명부 마을로 채웠어요" if "village_from_roster" in checks
+               else "명부와 마을이 달라요" if "village_mismatch" in checks
+               else None if p.get("detail") else "모시러 갈 곳을 듣지 못했어요")
+        f["place"] = {"value": p["village"], "sub": p.get("detail") or p.get("point") or "모시러 갈 곳 모름",
+                      "level": "check" if why else "ok", "why": why}
+    else:
+        f["place"] = {"value": "모름", "sub": p.get("detail") or "", "level": "missing", "why": "통화에서 마을이 나오지 않았어요"}
+    return f
 
 
 def make_summary(req: dict, ai_summary: str | None) -> str:

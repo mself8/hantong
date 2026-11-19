@@ -79,9 +79,15 @@
   .act .hint { color: var(--text-3); font-size: 14px; }
   .note { color: var(--text-2); font-size: 16px; background: var(--muted-soft); border-radius: 10px; padding: 10px 14px; }
 
-  .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0 8px; }
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 24px 0 8px; }
   .fact { background: var(--bg); border-radius: 14px; padding: 16px 18px; }
-  .fact .k { color: var(--text-3); font-size: 14px; font-weight: 500; }
+  .fact.check { box-shadow: inset 0 0 0 1.5px var(--warn-line); }
+  .fact.missing { box-shadow: inset 0 0 0 1.5px #f2b8b5; }
+  .fact .k { color: var(--text-3); font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .flag { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
+  .flag.check { background: var(--wait-soft); color: var(--wait); }
+  .flag.missing { background: var(--danger-soft); color: var(--danger); }
+  .fact .why { font-size: 13px; color: var(--text-3); margin-top: 6px; line-height: 1.45; }
   .fact .v { font-size: 21px; font-weight: 700; margin-top: 4px; line-height: 1.35; word-break: keep-all; }
   .fact .v small { display: block; font-size: 15px; font-weight: 500; color: var(--text-2); margin-top: 2px; }
   .fact select { width: 100%; margin-top: 8px; height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: #fff; font-size: 16px; }
@@ -108,7 +114,6 @@
   .kv dt { color: var(--text-3); font-size: 15px; } .kv dd { margin: 0; font-weight: 500; }
   .app .notes { margin: 14px 0 0; padding: 12px 14px; background: var(--bg); border-radius: 10px; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 15px; color: var(--text-2); }
   .app .notes li::before { content: "• "; color: var(--warn-line); font-weight: 700; }
-  .more { margin-top: 10px; } .more summary { color: var(--primary); cursor: pointer; font-size: 15px; font-weight: 500; }
   .respond { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 8px; }
   .respond .rl { font-size: 14px; color: var(--text-3); }
   .respond .other:not([hidden]) { display: flex; gap: 8px; }
@@ -173,7 +178,7 @@
 <script>
 const STATUS = { pending: "확인 대기", submitted: "기관 회신 대기", confirmed: "안내 대기", notified: "안내 완료", held: "보류", processing: "정리 중" };
 const TABS = [["pending", "확인 대기"], ["submitted", "기관 회신 대기"], ["confirmed", "안내 대기"], ["notified", "안내 완료"], ["all", "전체"]];
-const APP_STATUS = { draft: "작성됨", submitted: "제출함", confirmed: "확정", rejected: "불가" };
+const APP_STATUS = { draft: "요청 전", submitted: "요청함", confirmed: "확정", rejected: "불가" };
 const KEY_FIELDS = { companion: ["진료일", "병원", "요금"], hope_taxi: ["운행일", "승차 지점", "목적지", "요금"], special_transport: ["진료일", "교통약자 등록", "요금"] };
 
 let items = [], tab = "pending", selected = null, current = null, editing = false, editMsg = false;
@@ -241,8 +246,8 @@ function action(r) {
   const drafts = apps.filter((a) => a.status === "draft");
   const unsure = r.hospital && r.hospital.status === "candidates" && r.hospital.basis !== "department";
   if (r.status === "pending" && drafts.length)
-    return unsure ? `<button class="primary" disabled>신청서 ${drafts.length}장 제출</button><span class="hint">병원을 먼저 골라 주세요</span>`
-                  : `<button class="primary" data-act="submit">신청서 ${drafts.length}장 제출</button><span class="hint">기관별 신청서를 한 번에 보내요</span>`;
+    return unsure ? `<button class="primary" disabled>기관 ${drafts.length}곳에 요청</button><span class="hint">병원을 먼저 골라 주세요</span>`
+                  : `<button class="primary" data-act="submit">기관 ${drafts.length}곳에 요청</button><span class="hint">전화로 요청한 뒤 눌러서 기록해요</span>`;
   if ((r.status === "confirmed" || (r.status === "pending" && !apps.length)) && r.message && r.message.status !== "sent")
     return `<button class="primary" data-act="send">어르신께 안내 보내기</button><span class="hint">아래 문자 내용을 확인하세요</span>`;
   if (r.status === "submitted") return `<span class="note">기관 회신을 기다리는 중이에요</span>`;
@@ -251,22 +256,22 @@ function action(r) {
   return "";
 }
 
-function fact(k, v) { return `<div class="fact"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
+const FLAG = { check: "확인 필요", missing: "모름" };
+// 맨 위 칸 하나: 값은 늘 보여 주고, 믿기 어려우면 '확인 필요'·'모름' 표시와 이유를 단다(판정은 서버의 facts)
+function tile(k, x, extra = "") {
+  if (!x) return "";
+  const lv = x.level || "ok";
+  return `<div class="fact ${lv}"><div class="k">${k}${lv !== "ok" ? `<span class="flag ${lv}">${FLAG[lv]}</span>` : ""}</div>
+    <div class="v">${esc(x.value)}${x.sub ? `<small>${esc(x.sub)}</small>` : ""}</div>${x.why ? `<div class="why">${esc(x.why)}</div>` : ""}${extra}</div>`;
+}
 
 function renderDetail() {
   const r = current;
   if (!r) { $("detail").innerHTML = `<p class="empty">왼쪽에서 요청을 고르세요.</p>`; return; }
-  const res = r.resident || {}, v = r.visit || {}, h = r.hospital || {}, c = r.companion || {}, p = r.pickup || {}, ev = r.evidence || {};
+  const res = r.resident || {}, h = r.hospital || {}, F = r.facts || {};
   const cands = h.candidates || [];
-
-  const day = v.date ? `${md(v.date + "T")}${v.time ? `<small class="num">${esc(v.time)}</small>` : "<small>시간 모름</small>"}` : `확인 필요<small>${esc(v.date_expr || "")}</small>`;
-  let hosp;
-  if (h.status === "matched" && cands.length && h.basis !== "department") hosp = `${esc(cands[0].name)}${cands[0].far ? "<small>관외</small>" : ""}`;
-  else if (cands.length) hosp = `${h.basis === "department" ? "이름 모름" : `후보 ${cands.length}곳`}<small>${esc(h.department || "")}</small>
-      <select data-act="hospital" aria-label="병원 고르기"><option value="">병원 고르기</option>${cands.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}${x.far ? " (관외)" : ""}</option>`).join("")}</select>`;
-  else hosp = "확인 필요";
-  const helps = [c.needed === "yes" ? "병원동행" : null, r.wheelchair_needed === "yes" ? "휠체어 차량" : null].filter(Boolean);
-  const place = `${esc(p.village || "확인 필요")}${p.detail ? `<small>${esc(p.detail)}</small>` : ""}`;
+  const pick = cands.length > 1 && F.hospital && F.hospital.level !== "ok"
+    ? `<select data-act="hospital" aria-label="병원 고르기"><option value="">병원 고르기</option>${cands.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}${x.far ? " (관외)" : ""}</option>`).join("")}</select>` : "";
 
   const checks = (r.checks || []);
   const callout = checks.length ? `<section class="part"><h3>확인할 것 <span class="cnt">${checks.length}건</span></h3>
@@ -287,12 +292,11 @@ function renderDetail() {
     return `<article class="app"><div class="app-h"><div class="n"><b>${esc(a.label)}</b><span>${esc(a.agency)} · <span class="num">${esc(a.contact)}</span></span></div>
         ${badge(a.status === "draft" ? "draft" : a.status, APP_STATUS[a.status] || a.status)}</div>
       <dl class="kv">${main}</dl>${notes ? `<ul class="notes">${notes}</ul>` : ""}
-      <div class="more"><a class="linkbtn" href="/forms/${encodeURIComponent(r.id)}/${encodeURIComponent(a.id)}" target="_blank" rel="noopener">신청서 양식으로 보기 · 인쇄 ↗</a></div>
       ${resp}</article>`;
   }).join("");
-  const appsPart = `<section class="part"><h3>기관별 신청서 <span class="cnt">${(r.applications || []).length}장</span>
-      <button class="btn" style="margin-left:auto;height:38px;font-size:15px" data-act="pdf">신청서 PDF 내려받기</button></h3>
-    ${apps ? `<div class="apps">${apps}</div>` : `<p class="note">기관에 낼 신청서가 없는 건이에요.</p>`}</section>`;
+  const appsPart = `<section class="part"><h3>기관에 요청할 것 <span class="cnt">${(r.applications || []).length}건</span>
+      <button class="btn" style="margin-left:auto;height:38px;font-size:15px" data-act="pdf">공식 신청서 PDF</button></h3>
+    ${apps ? `<div class="apps">${apps}</div>` : `<p class="note">기관에 요청할 것이 없는 건이에요.</p>`}</section>`;
 
   const m = r.message;
   let msg;
@@ -309,7 +313,7 @@ function renderDetail() {
     <div class="dh"><div class="t"><h2>${esc(res.name ? `${res.name} 어르신` : "명부 확인 필요")}${res.age ? ` <span class="num" style="font-weight:500;color:var(--text-2)">(${res.age})</span>` : ""}</h2>
       <div class="sub">${badge(r.status, STATUS[r.status] || r.status)} <span class="num">${md(r.created_at)} ${hhmm(r.created_at)}</span> 전화${res.village ? " · " + esc(res.village) : ""}</div></div>
       <div class="act">${action(r)}</div></div>
-    <div class="facts">${fact("가는 날", day)}${fact("병원", hosp)}${fact("필요한 도움", helps.length ? helps.join("<br>") : "교통만")}${fact("사는 곳", place)}</div>
+    <div class="facts">${tile("가는 날", F.date)}${tile("병원", F.hospital, pick)}${tile("교통수단", F.transport)}${tile("진료 시각", F.time)}${tile("필요한 도움", F.companion)}${tile("사는 곳", F.place)}</div>
     ${callout}${appsPart}${msgPart}
     <section class="part"><h3>통화 기록 전체 <span class="cnt">${(r.transcript || []).length}줄</span></h3><div class="turns log-box">${turns}</div></section>
     <div class="foot">${r.status !== "held" && r.status !== "notified" ? `<button class="linkbtn" data-act="hold">이 요청 보류하기</button>` : ""}</div>`;
