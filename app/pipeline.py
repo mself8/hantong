@@ -51,7 +51,14 @@ def _resident_view(r: dict) -> dict:
         "mobility": r.get("거동상태"),
         "ltc_grade": r.get("장기요양등급"),
         "guardian": r.get("보호자"),
+        "bus_card": _yn(r.get("교통복지카드")),                    # 65세 이상 농어촌버스 월 20회 무료 카드
+        "special_transport": _yn(r.get("특별교통수단_등록")),     # 특별교통수단 사전 등록
+        "low_income": _yn(r.get("수급_차상위")),                   # 기초생활수급·차상위
     }
+
+
+def _yn(v: str | None) -> bool | None:
+    return {"Y": True, "N": False}.get((v or "").strip().upper())
 
 
 def find_resident(caller: str | None) -> dict | None:

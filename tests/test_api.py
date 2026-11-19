@@ -110,7 +110,9 @@ def test_vapi_structured_output_skips_server_llm(monkeypatch):
     assert [a["type"] for a in req["applications"]] == ["hope_taxi", "special_transport"]
     taxi, special = req["applications"]
     assert taxi["fields"]["요금"].startswith("1,700원") and any("이장" in n for n in taxi["notes"])
-    assert any("미리 등록한 분만" in n for n in special["notes"])
+    assert special["fields"]["교통약자 등록"] == "미등록"  # 명부(R001)상 특별교통수단 미등록
+    assert any("등록이 안 된 분" in n for n in special["notes"])
+    assert any("교통복지카드가 있어" in n for n in taxi["notes"])  # R001은 카드 있음
     assert "신청서 초안 작성 (Vapi가 뽑은 항목으로)" in [h["note"] for h in req["history"]]
 
 
@@ -192,3 +194,23 @@ def test_address_detail_becomes_pickup_point(monkeypatch):
     assert req["pickup"]["detail"] == "수하리 마을회관 옆 파란 지붕 집"
     assert req["pickup"]["point"] == "수하리 마을회관 옆 파란 지붕 집"
     assert req["applications"][0]["fields"]["상세 주소"] == "수하리 마을회관 옆 파란 지붕 집"
+
+
+def test_low_income_resident_gets_reduced_companion_fee(monkeypatch):
+    monkeypatch.setenv("DEMO_CALLERS", "web:R002")  # R002는 명부상 기초수급·차상위
+    body = report()
+    body["message"]["call"] = {"id": "web-2", "type": "webCall"}
+    rid = client.post("/vapi/webhook", json=body).json()["id"]
+    app = client.get(f"/api/requests/{rid}").json()["applications"][0]
+    assert app["fields"]["요금"].startswith("첫 1시간 1,000원")
+
+
+def test_view_page_shows_forms_and_message():
+    rid = client.post("/vapi/webhook", json=report()).json()["id"]
+    client.post(f"/api/requests/{rid}/submit")
+    client.post(f"/api/requests/{rid}/applications/A1/respond",
+                json={"result": "confirmed", "detail": "동행 매니저가 9시에 찾아갑니다.<b>"})
+    html = client.get("/view").text
+    assert "병원동행 신청서" in html and "어르신께 보낼 안내문" in html
+    assert "동행 매니저가 9시에 찾아갑니다.&lt;b&gt;" in html  # 값은 이스케이프해서 보여 준다
+    assert client.get("/").status_code == 200

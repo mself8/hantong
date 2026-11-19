@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import pipeline, store
+from . import pipeline, store, view
 from .data import hospitals, villages
 
 load_dotenv()  # 로컬에서만 .env를 읽는다. Railway는 환경변수를 직접 넣는다.
@@ -189,6 +189,12 @@ def call_page() -> str:
     return CALL_PAGE.read_text(encoding="utf-8").replace("</head>", script + "\n</head>", 1)
 
 
+@app.get("/view", response_class=HTMLResponse)
+def view_page() -> str:
+    """신청서·안내문 확인용 읽기 전용 화면 (대시보드와 별개로 항상 열린다)."""
+    return view.page()
+
+
 # ── 대시보드 화면 ─────────────────────────────────────
 
 DIST = Path(__file__).resolve().parent.parent / "dashboard" / "dist"
@@ -197,4 +203,4 @@ if (DIST / "index.html").exists():
 else:
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
-        return "<h1>한 통이면 돼유</h1><p>대시보드 준비 중. API 문서: <a href='/docs'>/docs</a></p>"
+        return view.page()
