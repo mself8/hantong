@@ -99,3 +99,13 @@ def test_outside_resident_is_not_filled_from_the_roster():
     assert req["pickup"]["village"] is None
     assert any(c["type"] == "lives_outside" for c in req["checks"])
     assert not any(c["type"] == "village_from_roster" for c in req["checks"])
+
+
+def test_far_stops_are_not_called_near_and_no_units():
+    """청량리는 리 중심 좌표에서 4km 밖 정류장이 잡혔다 → '가까운 정류장'이라 하지 않는다. 거리는 걸어서 몇 분으로."""
+    from app import bus
+    from app.normalize import match_village
+    t = bus.guide_text(match_village("서석면 청량리"))
+    assert "가까운 정류장:" not in t and "자료로 확인하지 못했어요" in t and "km" not in t
+    t = bus.guide_text(match_village("서석면 수하리"))
+    assert "가까운 정류장:" in t and "km" not in t

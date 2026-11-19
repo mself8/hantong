@@ -34,8 +34,8 @@ def test_last_checked_address_goes_on_the_request():
             {"id": "t1", "function": {"name": "check_address", "arguments": {"said": said}}}]}}
         return client.post("/vapi/tools", json=body).json()["results"][0]["result"]
 
-    assert "서석면 청량1리 30번지" in ask("서석면 청량1리 30번지")
-    assert "서석면 청량2리 30번지" in ask("청량2리 30번지")
+    assert "서석면 청량일리(숫자 하나) 30번지" in ask("서석면 청량1리 30번지")
+    assert "서석면 청량이리(숫자 둘) 30번지" in ask("청량2리 30번지")  # 소리 나는 대로 읽게 돌려준다
     body = report(dict(FIELDS, village="청량1리", address_detail="청량1리 30번지"))
     rid = client.post("/vapi/webhook", json=body).json()["id"]
     req = client.get(f"/api/requests/{rid}").json()

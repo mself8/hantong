@@ -34,7 +34,7 @@ def test_saves_and_says_what_is_still_missing():
     assert m.startswith("저장: 성함 최혜자") and "아직 모르는 것: 주소" in m
     tool("c1", address="서석면 청량1리 30번지")
     m = tool("c1", address="아니 청량2리 30번지")  # 고치시면 마지막 값이 남는다
-    assert "청량2리(숫자 둘) 30번지" in m  # 전화로는 '이리'와 '일리'가 거의 같게 들린다
+    assert "청량이리(숫자 둘) 30번지" in m  # 전화로는 '이리'와 '일리'가 거의 같게 들려 소리와 숫자를 함께 준다
     assert slots.STATE["c1"]["address"]["detail"] == "청량2리 30번지"
 
 

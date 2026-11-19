@@ -10,7 +10,7 @@ import re
 from datetime import date
 from functools import lru_cache
 
-from .bus import meters, nearest_stops
+from .bus import close_stops, meters
 from .data import DATA, WEEKDAYS, hospital_by_id, villages
 
 AGENCIES = {
@@ -102,7 +102,7 @@ def form_address(pickup: dict) -> str:
 def _stop(p: dict) -> str | None:
     """사는 리에서 가까운 버스 정류장 이름(국토교통부 정류장 위치정보)."""
     v = next((v for v in villages() if v.code == p.get("village_code")), None)
-    near = nearest_stops(v, 1) if v else []
+    near = close_stops(v, 1) if v else []  # 멀리 있는 정류장은 띄우지 않는다
     return near[0][0] if near else None
 
 

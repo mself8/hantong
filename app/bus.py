@@ -95,6 +95,15 @@ def nearest_stops(village, k: int = 2) -> list[tuple[str, int]]:
     return found
 
 
+NEAR_M = 1500  # 이보다 먼 정류장은 '가까운 정류장'이라 하지 않는다(리 중심 좌표가 어긋난 리는 4km 밖 정류장이 잡혔다)
+
+
+def close_stops(village, k: int = 2) -> list[tuple[str, int]]:
+    """걸어갈 만한 정류장만: 마을 이름이 든 정류장이거나 1.5km 안."""
+    core = village.name.removesuffix("리")
+    return [(n, m) for n, m in nearest_stops(village, k) if (len(core) >= 2 and core in n) or m <= NEAR_M]
+
+
 def routes(village) -> list[dict]:
     """이 리를 지나는 노선 구간. 리 이름으로 먼저 찾고, 없으면 면 이름으로 찾는다."""
     core = village.name.removesuffix("리")
@@ -109,16 +118,18 @@ def routes(village) -> list[dict]:
 def _hm(name: str, m: int, core: str) -> str:
     if len(core) >= 2 and core in name:  # 마을 이름 정류장은 거리를 붙이지 않는다(리 중심 좌표가 어긋날 수 있다)
         return name
-    return f"{name}(약 {round(m, -2) if m >= 100 else m}m)" if m < 1000 else f"{name}(약 {m / 1000:.1f}km)"
+    return f"{name}(걸어서 약 {max(1, round(m / 67))}분)"  # 숫자+단위(4.0km)는 목소리로 읽으면 헷갈린다('시속 4km'로 들림)
 
 
 def guide_text(village) -> str:
     """통화 중 AI에게 돌려줄 버스 안내. AI는 이 가운데 필요한 한두 가지만 말한다."""
     parts = [f"{village.label} 버스 안내(홍천군대중교통정보 공식 시간표 기준)."]
-    near = nearest_stops(village)
+    near = close_stops(village)
     if near:
         core = village.name.removesuffix("리")
         parts.append("가까운 정류장: " + ", ".join(_hm(n, m, core) for n, m in near) + ".")
+    else:
+        parts.append("마을 가까이 있는 정류장은 자료로 확인하지 못했어요. 타는 곳은 담당자가 확인해 알려 드린다고 하세요.")
     if village.town == "홍천읍":
         parts.append("홍천읍 안이에요. 가까운 정류장에서 홍천터미널(읍내) 방면 버스를 타시면 돼요.")
     on_751 = [n for n in route_751() if len(village.name) >= 3 and village.name.removesuffix("리") in n]

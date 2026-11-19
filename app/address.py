@@ -14,6 +14,14 @@ from .normalize import _edit, _jamo, match_village, sounds
 
 OUTSIDE = ("춘천", "원주", "강릉", "횡성", "인제", "양구", "평창", "가평", "양평", "서울", "인천", "경기", "부산", "대구", "대전", "광주")
 _KNUM = {"일": "1", "이": "2", "삼": "3", "사": "4", "오": "5"}
+_SOUND = {"1": "일", "2": "이", "3": "삼", "4": "사", "5": "오"}
+_WORD = {"1": "하나", "2": "둘", "3": "셋", "4": "넷", "5": "다섯"}
+
+
+def speak_ri(text: str) -> str:
+    """마을 번호를 소리 나는 대로 읽게 쓴다: '청량2리' → '청량이리(숫자 둘)'.
+    전화로는 '이리'와 '일리'가 거의 같게 들리고, 숫자 2는 목소리가 다르게 읽을 수 있다(11-20 시험 통화)."""
+    return re.sub(r"(\d)리", lambda m: f"{_SOUND.get(m.group(1), m.group(1))}리(숫자 {_WORD.get(m.group(1), m.group(1))})", text)
 
 
 def _eun(word: str) -> str:
@@ -87,7 +95,7 @@ def check(text: str | None) -> dict:
     lot_s = re.sub(r"\s+", "", lot.group(0)) if lot else None
     detail = f"{ri} {lot_s}번지" if lot_s else None
     label = f"{v.town} {detail or ri}"
-    msg = f"확인: {label}. 이대로 되읽어 확인하세요."
+    msg = f"확인: {speak_ri(label)}. 이대로 되읽어 확인하세요."
     if not lot_s:
         msg += " 번지를 여쭤 보세요. 모르시면 리까지만 적어요."
     out.update(status="ok", label=label, village=f"{v.town} {ri}", ri=ri, lot=lot_s, detail=detail, message=msg)

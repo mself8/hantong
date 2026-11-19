@@ -24,12 +24,7 @@ LABEL = {"name": "성함", "address": "주소", "hospital": "병원", "date": "�
 ASK = {"name": "성함", "address": "주소(읍·면, 리, 번지)", "hospital": "병원", "date": "가는 날짜", "time": "진료 시각",
        "companion": "같이 가 드릴 분이 필요한지", "wheelchair": "휠체어를 타시는지", "bus": "버스를 타실 수 있는지",
        "pickup": "모시러 갈 곳"}
-_NUM_WORD = {"1": "하나", "2": "둘", "3": "셋", "4": "넷", "5": "다섯"}
-
-
-def speak_ri(text: str) -> str:
-    """마을 번호를 헷갈리지 않게 읽는다: '청량2리' → '청량2리(숫자 둘)'. 전화로는 '이리'와 '일리'가 거의 같게 들린다."""
-    return re.sub(r"(\d)리", lambda m: f"{m.group(1)}리(숫자 {_NUM_WORD.get(m.group(1), m.group(1))})", text)
+speak_ri = address.speak_ri  # '청량2리' → '청량이리(숫자 둘)'
 
 
 def speak_date(d: date) -> str:
