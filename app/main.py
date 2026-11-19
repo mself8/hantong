@@ -122,15 +122,21 @@ def _out(req: dict) -> dict:
 
 
 @app.on_event("startup")
-def _rename_demo_residents() -> None:
-    """가상 명부 이름을 가린 이름(강○○)에서 가상 실명으로 바꿨으니, 이미 저장된 신청의 이름도 맞춘다."""
+def _tidy_saved_requests() -> None:
+    """이미 저장된 신청을 지금 규칙에 맞춘다: 가린 이름(강○○) → 가상 실명, AI 말 속 서비스 이름 오타 → '한 통이면 돼유'."""
     from .data import residents
     names = {r["resident_id"]: r.get("이름") for r in residents()}
     for req in store.list_all(None):
+        before = json.dumps(req, ensure_ascii=False)
         res = req.get("resident") or {}
         old, new = res.get("name") or "", names.get(res.get("resident_id"))
         if "○" in old and new:
-            store.save(json.loads(json.dumps(req, ensure_ascii=False).replace(old, new)))
+            req = json.loads(before.replace(old, new))
+        for t in req.get("transcript") or []:
+            if t.get("role") == "ai":
+                t["text"] = live.fix_name(t["text"])
+        if json.dumps(req, ensure_ascii=False) != before:
+            store.save(req)
 
 
 @app.get("/api/requests")
