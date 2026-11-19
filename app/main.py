@@ -6,6 +6,7 @@ import logging
 import mimetypes
 import os
 import re
+import threading
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,7 +17,7 @@ from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import live, pipeline, store, view, workflow
+from . import kakao, live, pipeline, store, view, workflow
 from .data import hospitals, villages, voice_cards
 
 mimetypes.add_type("font/woff2", ".woff2")  # 글꼴 파일을 글꼴 형식으로 내보낸다
@@ -142,6 +143,31 @@ def _tidy_saved_requests() -> None:
                 c["message"] = re.sub(r"성함\(([^)]+)\)", lambda m: f"성함({pipeline.clean_name(m.group(1))})", c["message"])
         if json.dumps(req, ensure_ascii=False) != before:
             store.save(req)
+
+
+@app.on_event("startup")
+def _find_saved_pickups() -> None:
+    """지도 키를 넣기 전에 들어온 신청도 모시러 갈 곳을 실제 주소로 바꿔 둔다. 서버가 켜지는 걸 막지 않게 따로 돈다."""
+    if kakao.enabled():
+        threading.Thread(target=_fill_saved_maps, daemon=True).start()
+
+
+def _fill_saved_maps() -> None:
+    by_code = {v.code: v for v in villages()}
+    for req in store.list_all(None):
+        p = req.get("pickup") or {}
+        if p.get("map") or not p.get("village_code"):
+            continue
+        found = kakao.find_pickup(p.get("point"), by_code.get(p["village_code"]))
+        if not found:  # 못 찾으면 저장하지 않고, 다음에 서버가 켜질 때 다시 찾아본다
+            continue
+        p["map"] = found
+        addr = workflow.pickup_address(p)
+        for a in req.get("applications") or []:  # 기관에 보낼 신청서의 주소 칸도 실제 주소로
+            for k in ("상세 주소", "승차 지점", "출발지"):
+                if k in a["fields"]:
+                    a["fields"][k] = addr
+        store.save(req)
 
 
 @app.get("/api/requests")

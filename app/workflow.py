@@ -68,6 +68,12 @@ def elder_name(req: dict) -> str | None:
     return req.get("caller_name") or (req.get("resident") or {}).get("name")
 
 
+def pickup_address(pickup: dict) -> str | None:
+    """카카오맵에서 찾은 모시러 갈 곳의 실제 주소. 예: '강원특별자치도 홍천군 서석면 ○○길 12 (수하리마을회관) 앞'"""
+    m = pickup.get("map")
+    return f"{m['address']} ({m['name']}){m['tail']}" if m else None
+
+
 def _transport(req: dict, why_place: str | None) -> dict:
     """교통수단: 통화에서 받은 휠체어 여부와 사는 마을로 정한다(어르신께 따로 묻지 않는다)."""
     p, res = req.get("pickup") or {}, req.get("resident") or {}
@@ -145,6 +151,8 @@ def facts(req: dict) -> dict:
                else None if p.get("detail") else "모시러 갈 곳을 듣지 못했어요")
         f["place"] = {"value": p["village"], "sub": p.get("detail") or p.get("point") or "모시러 갈 곳 모름",
                       "level": "check" if why else "ok", "why": why}
+        if p.get("map"):  # 카카오맵에서 찾은 실제 주소와 지도 링크
+            f["place"].update(addr=pickup_address(p), url=p["map"].get("url"))
     else:
         f["place"] = {"value": "모름", "sub": p.get("detail") or "", "level": "missing", "why": "통화에서 마을이 나오지 않았어요"}
     return f
@@ -193,7 +201,7 @@ def build_applications(req: dict) -> list[dict]:
         "나이": f"{resident['age']}세" if resident.get("age") else "확인 필요",
         "연락처": (req.get("call") or {}).get("caller") or "확인 필요",
         "사는 마을": pickup.get("village") or "확인 필요",
-        "상세 주소": pickup.get("detail") or "확인 필요",
+        "상세 주소": pickup_address(pickup) or pickup.get("detail") or "확인 필요",
         "진료일": _date_label(visit.get("date")),
         "진료 시각": visit.get("time") or "모름",
         "병원": _hospital_label(req),
@@ -223,7 +231,7 @@ def build_applications(req: dict) -> list[dict]:
                      resident.get("bus_card"), "65세 이상은 교통복지카드가 있으면 농어촌버스가 월 20회 무료예요.")]
         apps.append(_app("hope_taxi", len(apps) + 1, {
             "마을": pickup.get("village"),
-            "승차 지점": pickup.get("point") or "마을회관 (확인 필요)",
+            "승차 지점": pickup_address(pickup) or pickup.get("point") or "마을회관 (확인 필요)",
             "운행일": common["진료일"],
             "목적지": f"{town} 소재지" if town != "홍천읍" else "홍천읍내 병원",
             "인원": "1명" + (" + 동행 매니저" if companion.get("needed") == "yes" else ""),
@@ -234,7 +242,7 @@ def build_applications(req: dict) -> list[dict]:
     if req.get("wheelchair_needed") == "yes":
         apps.append(_app("special_transport", len(apps) + 1, {
             **common,
-            "출발지": pickup.get("village") or "확인 필요",
+            "출발지": pickup_address(pickup) or pickup.get("village") or "확인 필요",
             "목적지": common["병원"],
             "휠체어": "필요",
             "교통약자 등록": {True: "등록됨", False: "미등록"}.get(resident.get("special_transport"), "확인 필요"),

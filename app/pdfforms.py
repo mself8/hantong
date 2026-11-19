@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pymupdf as fitz
 
-from .workflow import elder_name
+from .workflow import elder_name, pickup_address
 
 HERE = Path(__file__).resolve().parent
 FORMS = HERE / "forms"
@@ -28,8 +28,11 @@ def _fonts(page: fitz.Page) -> None:
     page.insert_font(fontname="PB", fontfile=FONT_BOLD)
 
 
-def _put(page: fitz.Page, x: float, y: float, text: str | None, size: float = 10, color=INK) -> None:
+def _put(page: fitz.Page, x: float, y: float, text: str | None, size: float = 10, color=INK,
+         width: float | None = None) -> None:
     if text:
+        if width:  # 칸보다 길면 글자를 줄여 칸 안에 넣는다(긴 주소)
+            size = min(size, size * width / fitz.Font(fontfile=FONT).text_length(str(text), fontsize=size))
         page.insert_text((x, y), str(text), fontname="P", fontsize=size, color=color)
 
 
@@ -39,6 +42,8 @@ def _check(page: fitz.Page, x: float, y: float) -> None:
 
 def _addr(req: dict) -> str:
     p = req.get("pickup") or {}
+    if pickup_address(p):  # 카카오맵에서 찾은 실제 주소
+        return pickup_address(p)
     base = f"강원특별자치도 홍천군 {p['village']}" if p.get("village") else "강원특별자치도 홍천군 (마을 확인 필요)"
     return base + (f" ({p['detail']})" if p.get("detail") else "")
 
@@ -64,7 +69,7 @@ def integrated_form(doc: fitz.Document, req: dict) -> None:
     _put(p, 238, 119, f"{d.year}. {d.month}. {d.day}.")
     _put(p, 123, 172, elder_name(req) or "확인 필요", 12)
     _put(p, 430, 171, _phone(req))
-    _put(p, 150, 198, _addr(req))
+    _put(p, 150, 198, _addr(req), width=400)
     _check(p, 214, 549)   # 안내대상: 대상자 본인
     _check(p, 342, 569)   # 안내방식: 문자메시지서비스(SMS)
     _check(p, 324, 685)   # 신청 구분: 본인(전화로 신청)
@@ -91,8 +96,8 @@ def special_transport_form(doc: fitz.Document, req: dict) -> None:
         _put(p, 120, y, name)
         _put(p, 455, y, sex)
     _put(p, 420, 355, "본인")
-    for y in (355, 447):
-        _put(p, 120, y, addr, 9)
+    for y, w in ((355, 234), (447, 415)):  # 신청인 주소 칸은 '관계' 칸 앞에서 끝난다
+        _put(p, 120, y, addr, 9, width=w)
     _put(p, 335, 378, phone)
     _put(p, 335, 470, phone)
     if (res.get("age") or 0) >= 65:

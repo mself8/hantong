@@ -7,7 +7,7 @@ import re
 import secrets
 from datetime import date, datetime, timedelta, timezone
 
-from . import store
+from . import kakao, store
 from .live import fix_name
 from .data import residents, villages
 from .normalize import detect_department, match_hospital, match_village, resolve_date, resolve_time
@@ -162,6 +162,8 @@ def fill(req: dict, ex, today: date) -> dict:
                       "message": f"통화에서 확인한 날짜({ex.date})와 말씀하신 표현('{ex.date_expr}')으로 계산한 날짜"
                                  f"({rule_date.isoformat()})가 달라요. 통화 기록을 보고 확인해 주세요."})
 
+    # 통화에서 들은 자세한 위치가 있으면 그곳, 없으면 명부의 승차 지점(같은 마을일 때만)
+    point = ex.address_detail or (resident.get("pickup_point") if same_as_roster else None)
     req.update({
         "intent": ex.intent,
         "summary": ex.summary,
@@ -173,9 +175,8 @@ def fill(req: dict, ex, today: date) -> dict:
         "caller_name": clean_name(ex.caller_name),
         "pickup": {"village_expr": ex.village, "village": village.label if village else spoken_town,
                    "village_code": village.code if village else None,
-                   "detail": ex.address_detail,
-                   # 통화에서 들은 자세한 위치가 있으면 그곳, 없으면 명부의 승차 지점(같은 마을일 때만)
-                   "point": ex.address_detail or (resident.get("pickup_point") if same_as_roster else None)},
+                   "detail": ex.address_detail, "point": point,
+                   "map": kakao.find_pickup(point, village)},  # 카카오맵에서 찾은 실제 주소(못 찾으면 None)
         "mobility": ex.mobility or (resident.get("mobility") if resident else None),
         "wheelchair_needed": ex.wheelchair_needed,
         "bus_ok": ex.bus_ok,

@@ -100,6 +100,8 @@
   .flag.check { background: var(--wait-soft); color: var(--wait); }
   .flag.missing { background: var(--danger-soft); color: var(--danger); }
   .fact .why { font-size: 13px; color: var(--text-3); margin-top: 6px; line-height: 1.45; }
+  .fact .addr { font-size: 14px; color: var(--text-2); margin-top: 6px; line-height: 1.45; word-break: keep-all; }
+  .fact .addr a { color: var(--primary); font-weight: 600; white-space: nowrap; }
   .fact .v { font-size: 21px; font-weight: 700; margin-top: 4px; line-height: 1.35; word-break: keep-all; }
   .fact .v small { display: block; font-size: 15px; font-weight: 500; color: var(--text-2); margin-top: 2px; }
   .fact select { width: 100%; margin-top: 8px; height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: #fff; font-size: 16px; }
@@ -360,7 +362,7 @@ function renderDetail() {
     <div class="dh"><div class="t"><h2>${esc(r.display_name ? `${r.display_name} 어르신` : "등록 정보 없음")}${res.age ? ` <span class="num" style="font-weight:500;color:var(--text-2)">(${res.age})</span>` : ""}</h2>
       <div class="sub">${badge(r.status, STATUS[r.status] || r.status)} <span class="num">${md(r.created_at)} ${hhmm(r.created_at)}</span> 전화${(r.pickup && r.pickup.village) || res.village ? " · " + esc((r.pickup && r.pickup.village) || res.village) : ""}</div></div>
       <div class="act">${action(r)}</div></div>
-    <div class="facts">${tile("가는 날", F.date)}${tile("병원", F.hospital, pick)}${tile("교통수단", F.transport)}${tile("진료 시각", F.time)}${tile("필요한 도움", F.companion)}${tile("사는 곳", F.place)}</div>
+    <div class="facts">${tile("가는 날", F.date)}${tile("병원", F.hospital, pick)}${tile("교통수단", F.transport)}${tile("진료 시각", F.time)}${tile("필요한 도움", F.companion)}${tile("사는 곳", F.place, F.place && F.place.addr ? `<div class="addr">${esc(F.place.addr)}${F.place.url ? ` <a href="${esc(F.place.url)}" target="_blank" rel="noopener">지도 ↗</a>` : ""}</div>` : "")}</div>
     ${callout}${appsPart}${msgPart}
     <section class="part"><h3>통화 기록 전체 <span class="cnt">${(r.transcript || []).length}줄</span></h3><div class="turns log-box">${turns}</div></section>
     <div class="foot">${r.status !== "held" && r.status !== "notified" ? `<button class="linkbtn" data-act="hold">이 요청 보류하기</button>` : ""}</div>`;
