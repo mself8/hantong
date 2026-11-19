@@ -116,7 +116,21 @@ def create_from_text(body: TextIn) -> dict:
 
 def _out(req: dict) -> dict:
     """화면에 보낼 신청 한 건. 맨 위 여섯 칸(값과 '확인 필요' 표시)은 읽을 때마다 새로 계산한다."""
-    return {**req, "facts": workflow.facts(req)}
+    from .pdfforms import needs_registration
+    return {**req, "facts": workflow.facts(req), "display_name": workflow.elder_name(req),
+            "needs_registration": needs_registration(req)}
+
+
+@app.on_event("startup")
+def _rename_demo_residents() -> None:
+    """가상 명부 이름을 가린 이름(강○○)에서 가상 실명으로 바꿨으니, 이미 저장된 신청의 이름도 맞춘다."""
+    from .data import residents
+    names = {r["resident_id"]: r.get("이름") for r in residents()}
+    for req in store.list_all(None):
+        res = req.get("resident") or {}
+        old, new = res.get("name") or "", names.get(res.get("resident_id"))
+        if "○" in old and new:
+            store.save(json.loads(json.dumps(req, ensure_ascii=False).replace(old, new)))
 
 
 @app.get("/api/requests")
@@ -267,16 +281,16 @@ def voice_card_list() -> str:
             "<p>한 사람이 카드 한 장씩 맡아 통화해 주세요. 카드를 누르면 대본이 보여요.</p>" + rows + "</main></body></html>")
 
 
-@app.get("/api/requests/{rid}/forms.pdf")
-def application_bundle(rid: str) -> Response:
-    """통합지원 신청서 + 기관별 신청서(+ 필요하면 특별교통수단 등록 신청서)를 값을 채운 PDF 한 묶음으로 내려준다."""
+@app.get("/api/requests/{rid}/forms/{kind}.pdf")
+def official_form(rid: str, kind: str) -> Response:
+    """공식 신청서 한 장(integrated = 통합지원 신청서, special_transport = 특별교통수단 등록 신청서)에 값을 채운 PDF."""
     from . import pdfforms
     req = store.get(rid)
-    if not req:
+    if not req or kind not in pdfforms.FORMS_BY_KIND:
         raise HTTPException(status_code=404, detail="없는 신청서")
-    name = f"신청서_{rid}.pdf"
-    return Response(pdfforms.bundle(req), media_type="application/pdf",
-                    headers={"Content-Disposition": f"attachment; filename=\"forms_{rid}.pdf\"; filename*=UTF-8''{quote(name)}"})
+    name = f"{pdfforms.FORMS_BY_KIND[kind][0].replace(' ', '')}_{rid}.pdf"
+    return Response(pdfforms.single(req, kind), media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename=\"{kind}_{rid}.pdf\"; filename*=UTF-8''{quote(name)}"})
 
 
 @app.get("/view", response_class=HTMLResponse)

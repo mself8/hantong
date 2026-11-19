@@ -8,7 +8,8 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 
 from . import store
-from .data import residents
+from .live import fix_name
+from .data import residents, villages
 from .normalize import detect_department, match_hospital, match_village, resolve_date, resolve_time
 from .validate import run_checks
 from .workflow import build_applications, make_summary, refresh_status
@@ -43,7 +44,7 @@ def _demo_callers() -> dict[str, str]:
 def _resident_view(r: dict) -> dict:
     return {
         "resident_id": r["resident_id"],
-        "name": r["이름(마스킹)"],
+        "name": r.get("이름") or r.get("이름(마스킹)"),
         "age": int(r["나이"]) if r.get("나이", "").isdigit() else None,
         "sex": r.get("성별"),
         "village": f"{r['읍면']} {r['리']}",
@@ -104,14 +105,22 @@ def new_request(turns: list[dict], *, source: str, call: dict | None = None,
     return store.save(req)
 
 
+def _town_in(text: str | None) -> str | None:
+    """'홍천읍', '서석면 쪽' 같은 말에서 홍천군 읍·면 이름을 찾는다."""
+    return next((t for t in sorted({v.town for v in villages()}, key=len, reverse=True) if text and t in text), None)
+
+
 def fill(req: dict, ex, today: date) -> dict:
     """뽑은 항목(ex)을 실제 목록에 맞추고 규칙으로 점검해 신청서에 채운다."""
     resident = req.get("resident")
     roster_village = match_village(resident["village"]) if resident else None
     spoken_village = match_village(ex.village)
-    village = spoken_village or roster_village
+    # '홍천읍'처럼 읍·면까지만 말했고 등록된 주소와 읍·면이 다르면, 등록된 주소로 채우지 않고 말한 읍·면을 쓴다
+    spoken_town = None if spoken_village else _town_in(ex.village)
+    other_town = bool(spoken_town and roster_village and roster_village.town != spoken_town)
+    village = spoken_village or (None if other_town else roster_village)
     same_as_roster = bool(roster_village and village and roster_village.code == village.code)
-    home_town = village.town if village else None
+    home_town = village.town if village else spoken_town
     # 병원 이름 없이 아픈 곳만 말한 경우("배가 아파요")에도 진료과를 잡는다
     dept = ex.department or next((d for d in (detect_department(t) for t in (
         ex.hospital_query, ex.evidence_hospital, ex.companion_reason, ex.summary)) if d), None)
@@ -122,11 +131,20 @@ def fill(req: dict, ex, today: date) -> dict:
     extra = []
     if roster_village and spoken_village and not same_as_roster:
         extra.append({"type": "village_mismatch", "level": "warn",
-                      "message": f"명부에는 {roster_village.label}인데 통화에서는 {village.label}라고 했어요. 확인이 필요해요."})
-    if roster_village and not spoken_village:  # 통화에서 마을을 못 들었는데 명부로 채운 경우
-        heard = f"말씀하신 '{ex.village}'를 홍천 리 목록에서 찾지 못해" if ex.village else "통화에서 마을을 확인하지 못해"
+                      "message": f"등록된 주소는 {roster_village.label}인데 통화에서는 {village.label}라고 했어요. 확인이 필요해요."})
+    if spoken_town and not village:  # 읍·면까지만 듣고, 등록된 주소와도 읍·면이 다르다
+        extra.append({"type": "village_town_only", "level": "warn",
+                      "message": f"통화에서 '{spoken_town}'까지만 들었어요. 무슨 리인지 확인이 필요해요."
+                                 + (f" (등록된 주소: {roster_village.label})" if roster_village else "")})
+    elif roster_village and not spoken_village:  # 통화에서 마을을 못 들었는데 등록된 주소로 채운 경우
+        heard = (f"통화에서 '{spoken_town}'까지만 들어서 리는" if spoken_town
+                 else f"말씀하신 '{ex.village}'를 홍천 리 목록에서 찾지 못해" if ex.village else "통화에서 마을을 확인하지 못해")
         extra.append({"type": "village_from_roster", "level": "warn",
-                      "message": f"{heard} 명부 마을({roster_village.label})을 넣었어요. 확인이 필요해요."})
+                      "message": f"{heard} 등록된 주소({roster_village.label})로 채웠어요. 확인이 필요해요."})
+    known = (resident or {}).get("name")
+    if ex.caller_name and known and ex.caller_name.replace(" ", "") != known.replace(" ", ""):
+        extra.append({"type": "name_mismatch", "level": "warn",
+                      "message": f"통화에서 말한 성함({ex.caller_name})이 이 번호로 등록된 이름({known})과 달라요. 본인인지 확인이 필요해요."})
     if rule_date and ex.date and rule_date.isoformat() != ex.date:
         extra.append({"type": "date_mismatch", "level": "warn",
                       "message": f"통화에서 확인한 날짜({ex.date})와 말씀하신 표현('{ex.date_expr}')으로 계산한 날짜"
@@ -140,7 +158,8 @@ def fill(req: dict, ex, today: date) -> dict:
                   "date_source": "rule" if rule_date else ("ai" if ex.date else None),
                   "time_expr": ex.time_expr, "time": resolve_time(ex.time_expr)},
         "companion": {"needed": ex.companion_needed, "reason": ex.companion_reason},
-        "pickup": {"village_expr": ex.village, "village": village.label if village else None,
+        "caller_name": ex.caller_name,
+        "pickup": {"village_expr": ex.village, "village": village.label if village else spoken_town,
                    "village_code": village.code if village else None,
                    "detail": ex.address_detail,
                    # 통화에서 들은 자세한 위치가 있으면 그곳, 없으면 명부의 승차 지점(같은 마을일 때만)
@@ -234,7 +253,7 @@ def parse_vapi_report(msg: dict) -> tuple[list[dict], dict, str | None]:
         if m.get("role") == "user":
             turns.append({"role": "elder", "text": text})
         elif m.get("role") in ("bot", "assistant"):
-            turns.append({"role": "ai", "text": text})
+            turns.append({"role": "ai", "text": fix_name(text)})
     if not turns:
         turns = parse_text((artifact.get("transcript") or msg.get("transcript") or "").replace("User:", "어르신:"))
     call = msg.get("call") or {}

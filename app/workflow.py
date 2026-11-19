@@ -63,7 +63,12 @@ def _hospital_label(req: dict) -> str:
     return "확인 필요"
 
 
-def _transport(req: dict, from_call: bool) -> dict:
+def elder_name(req: dict) -> str | None:
+    """어르신 이름: 통화에서 들은 성함이 먼저, 없으면 이 번호로 등록된 이름."""
+    return req.get("caller_name") or (req.get("resident") or {}).get("name")
+
+
+def _transport(req: dict, why_place: str | None) -> dict:
     """교통수단: 통화에서 받은 휠체어 여부와 사는 마을로 정한다(어르신께 따로 묻지 않는다)."""
     p, res = req.get("pickup") or {}, req.get("resident") or {}
     if req.get("wheelchair_needed") == "yes":
@@ -72,7 +77,7 @@ def _transport(req: dict, from_call: bool) -> dict:
     card = {True: "교통복지카드 있음(월 20회 무료)", False: "교통복지카드 없음"}.get(res.get("bus_card"), "교통복지카드 확인")
     if not p.get("village"):
         return {"value": "농어촌버스", "sub": card, "level": "check", "why": "사는 곳을 몰라 교통수단을 정하지 못했어요"}
-    roster = None if from_call else "명부 마을로 정한 교통수단이에요"
+    roster = why_place
     taxi = _hope_taxi_match(p["village"])
     if taxi:
         town = taxi["읍면"]
@@ -118,8 +123,10 @@ def facts(req: dict) -> dict:
     else:
         f["hospital"] = {"value": "모름", "sub": h.get("department") or "", "level": "missing", "why": "통화에서 병원이 나오지 않았어요"}
 
-    from_call = bool(p.get("village")) and not checks & {"village_from_roster", "village_mismatch"}
-    f["transport"] = _transport(req, from_call)
+    why_place = ("리를 몰라 희망택시를 탈 수 있는지 못 정했어요" if "village_town_only" in checks
+                 else "등록된 주소로 정한 교통수단이에요" if "village_from_roster" in checks
+                 else "등록된 주소와 마을이 달라 확인이 필요해요" if "village_mismatch" in checks else None)
+    f["transport"] = _transport(req, why_place)
 
     need = (req.get("companion") or {}).get("needed")
     f["companion"] = {"value": {"yes": "병원동행", "no": "필요 없음"}.get(need, "모름"),
@@ -128,8 +135,9 @@ def facts(req: dict) -> dict:
                       "why": None if need in ("yes", "no") else "동행이 필요한지 듣지 못했어요"}
 
     if p.get("village"):
-        why = ("명부 마을로 채웠어요" if "village_from_roster" in checks
-               else "명부와 마을이 달라요" if "village_mismatch" in checks
+        why = ("읍·면까지만 들었어요" if "village_town_only" in checks
+               else "등록된 주소로 채웠어요" if "village_from_roster" in checks
+               else "등록된 주소와 달라요" if "village_mismatch" in checks
                else None if p.get("detail") else "모시러 갈 곳을 듣지 못했어요")
         f["place"] = {"value": p["village"], "sub": p.get("detail") or p.get("point") or "모시러 갈 곳 모름",
                       "level": "check" if why else "ok", "why": why}
@@ -177,7 +185,7 @@ def build_applications(req: dict) -> list[dict]:
     pickup = req.get("pickup") or {}
     companion = req.get("companion") or {}
     common = {
-        "어르신": resident.get("name") or "명부 확인 필요",
+        "어르신": elder_name(req) or "확인 필요",
         "나이": f"{resident['age']}세" if resident.get("age") else "확인 필요",
         "연락처": (req.get("call") or {}).get("caller") or "확인 필요",
         "사는 마을": pickup.get("village") or "확인 필요",
@@ -273,7 +281,7 @@ def _topic(word: str) -> str:
 
 def confirmation_text(req: dict) -> str:
     """기관 응답으로 어르신께 보낼 확정 안내문을 만든다. 표준어 존댓말, 짧게."""
-    name = (req.get("resident") or {}).get("name")
+    name = elder_name(req)
     visit = req.get("visit") or {}
     who = f"{name} 어르신" if name else "어르신"
     lines = [f"{who}, {_date_label(visit.get('date'))} {_hospital_label(req)} 가시는 날 안내드립니다."]

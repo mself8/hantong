@@ -69,3 +69,27 @@ def test_webhook_feeds_live_view_and_report_fills_missing_turns():
     client.post("/vapi/webhook", json={"message": report})
     snap = client.get("/api/live/live-5").json()
     assert snap["ended"] and snap["skipped"] and snap["turns"] == [{"role": "ai", "text": "안녕하세요.", "partial": ""}]
+
+
+def test_growing_ai_text_is_not_cut_after_first_sentence():
+    """실제 통화에서 본 문제: 원문이 첫 문장만 먼저 와서 말풍선이 첫 문장에서 멈췄다."""
+    c = "live-6"
+    live.update(say(c, "user", "final", "허리가 아파요."))
+    live.update(say(c, "assistant", "final", "허리가 아프시군요."))
+    live.update(convo(c, "허리가 아프시군요."))                              # 첫 문장만 먼저 온 원문
+    live.update(say(c, "assistant", "final", "읍내 서울정형외과의원 어떠세요?"))  # 이어지는 말은 받아 적은 글자로 잇는다
+    assert turns(c)[-1] == ("ai", "허리가 아프시군요. 읍내 서울정형외과의원 어떠세요?", "")
+    live.update(convo(c, "허리가 아프시군요. 정형외과가 좋겠어요. 읍내 서울정형외과의원 어떠세요?"))  # 원문이 늘어난다
+    assert turns(c)[-1] == ("ai", "허리가 아프시군요. 정형외과가 좋겠어요. 읍내 서울정형외과의원 어떠세요?", "")
+    live.update(say(c, "user", "final", "다른 곳 없나요?"))
+    live.update(convo(c, "허리가 아프시군요. 정형외과가 좋겠어요. 읍내 서울정형외과의원 어떠세요?", "다른 곳도 있어요."))
+    assert turns(c)[-1] == ("ai", "다른 곳도 있어요.", "")
+
+
+def test_report_replaces_live_turns_and_fixes_name():
+    c = "live-7"
+    live.update(say(c, "assistant", "final", "안녕하세요, 홍천군 한통의면 대유AI 상담원입니다."))
+    assert turns(c)[0][1] == "안녕하세요, 홍천군 '한 통이면 돼유' AI 상담원입니다."
+    full = [{"role": "ai", "text": "안녕하세요."}, {"role": "elder", "text": "병원 가요."}, {"role": "ai", "text": "어디가 편찮으세요?"}]
+    live.finish({"call": {"id": c}}, "Q-1", full)
+    assert [t[1] for t in turns(c)] == ["안녕하세요.", "병원 가요.", "어디가 편찮으세요?"]

@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pymupdf as fitz
 
+from .workflow import elder_name
+
 HERE = Path(__file__).resolve().parent
 FORMS = HERE / "forms"
 FONT = str(HERE / "static" / "fonts" / "Paperlogy-4Regular.ttf")
@@ -60,7 +62,7 @@ def integrated_form(doc: fitz.Document, req: dict) -> None:
     d = _day(req)
     _put(p, 100, 119, req["id"])
     _put(p, 238, 119, f"{d.year}. {d.month}. {d.day}.")
-    _put(p, 123, 172, res.get("name") or "확인 필요", 12)
+    _put(p, 123, 172, elder_name(req) or "확인 필요", 12)
     _put(p, 430, 171, _phone(req))
     _put(p, 150, 198, _addr(req))
     _check(p, 214, 549)   # 안내대상: 대상자 본인
@@ -69,7 +71,7 @@ def integrated_form(doc: fitz.Document, req: dict) -> None:
     _put(p, 424, 722, str(d.year))
     _put(p, 472, 722, str(d.month))
     _put(p, 504, 722, str(d.day))
-    _put(p, 360, 738, res.get("name") or "")
+    _put(p, 360, 738, elder_name(req) or "")
     _put(p, 61, 800, "※ 파란 글씨는 '한 통이면 돼유'가 어르신 전화 내용으로 미리 채운 값입니다. 담당 공무원이 확인한 뒤 서명합니다.",
          7.5, GRAY)
 
@@ -81,7 +83,7 @@ def special_transport_form(doc: fitz.Document, req: dict) -> None:
     doc.insert_pdf(src)
     res = req.get("resident") or {}
     d = _day(req)
-    name, sex, addr, phone = res.get("name") or "확인 필요", res.get("sex") or "", _addr(req), _phone(req)
+    name, sex, addr, phone = elder_name(req) or "확인 필요", res.get("sex") or "", _addr(req), _phone(req)
     p = doc[start]
     _fonts(p)
     _put(p, 135, 212, req["id"])
@@ -108,14 +110,20 @@ def special_transport_form(doc: fitz.Document, req: dict) -> None:
     _put(p4, 340, 200, name, 11)
 
 
-def bundle(req: dict) -> bytes:
-    doc = fitz.open()
-    integrated_form(doc, req)
-    apps = req.get("applications") or []
-    needs_registration = any(a["type"] == "special_transport" for a in apps) and \
+FORMS_BY_KIND = {"integrated": ("통합지원 신청서", integrated_form),
+                 "special_transport": ("특별교통수단 등록 신청서", special_transport_form)}
+
+
+def needs_registration(req: dict) -> bool:
+    """휠체어 차량이 필요한데 특별교통수단 등록이 안 됐거나 모르면 등록 신청서가 필요하다."""
+    return any(a["type"] == "special_transport" for a in req.get("applications") or []) and \
         (req.get("resident") or {}).get("special_transport") is not True
-    if needs_registration:
-        special_transport_form(doc, req)
+
+
+def single(req: dict, kind: str) -> bytes:
+    """공식 신청서 한 장(통합지원 또는 특별교통수단 등록)에 값을 채운 PDF."""
+    doc = fitz.open()
+    FORMS_BY_KIND[kind][1](doc, req)
     out = doc.tobytes(garbage=3, deflate=True)
     doc.close()
     return out

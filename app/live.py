@@ -19,6 +19,13 @@ _LOCK = threading.Lock()
 _CALLS: dict[str, dict] = {}
 KEEP_SECONDS = 2 * 3600  # 두 시간 지난 통화는 지운다
 _NOT_CHAR = re.compile(r"[^0-9A-Za-z가-힣]")
+_BRAND = re.compile(r"'?한\s*통[이의]\s*면\s*[대돼]\s*유'?")
+
+
+def fix_name(text: str) -> str:
+    """AI 목소리를 받아 적으면 서비스 이름이 '한통의면 대유'처럼 틀린다. 우리 이름으로 바로잡는다."""
+    text = _BRAND.sub("'한 통이면 돼유'", text or "")
+    return re.sub(r"'한 통이면 돼유'(?=[0-9A-Za-z가-힣])", "'한 통이면 돼유' ", text)
 
 
 def _norm(s: str) -> str:
@@ -45,7 +52,7 @@ def _get(msg: dict) -> dict | None:
         for old in [k for k, v in _CALLS.items() if now - v["updated"] > KEEP_SECONDS]:
             del _CALLS[old]
         c = _CALLS[cid] = {"id": cid, "kind": "phone" if "phone" in (call.get("type") or "").lower() else "web",
-                           "started": now, "updated": now, "ended": None, "turns": [], "ai_seen": 0,
+                           "started": now, "updated": now, "ended": None, "turns": [], "ai_seen": 0, "ai_last": None,
                            "request_id": None, "skipped": False}
     c["updated"] = now
     return c
@@ -57,10 +64,20 @@ def _last(turns: list[dict], role: str) -> int:
 
 def _transcript(c: dict, role: str, final: bool, text: str) -> None:
     turns = c["turns"]
+    if role == "ai":
+        text = fix_name(text)
     me, other = _last(turns, role), _last(turns, "elder" if role == "ai" else "ai")
     if me > other:  # 상대가 끼어들기 전, 이번 차례 말풍선에 이어 쓴다
         t = turns[me]
-        if t.get("exact"):  # AI 원문으로 이미 채운 차례면 받아 적은 글자는 버린다
+        if t.get("exact"):
+            # AI 원문은 말하는 동안 앞 문장부터 온다. 원문에 아직 없는 뒷말만 받아 적은 글자로 잇고,
+            # 원문이 늘어나면(_conversation) 원문으로 바뀐다.
+            if _covered(text, t["text"]) >= 0.6:
+                return
+            if final:
+                t["text"], t["partial"] = f"{t['text']} {text}".strip(), ""
+            else:
+                t["partial"] = text
             return
     else:
         if other >= 0:
@@ -76,16 +93,25 @@ def _transcript(c: dict, role: str, final: bool, text: str) -> None:
 
 def _conversation(c: dict, msg: dict) -> None:
     convo = msg.get("messagesOpenAIFormatted") or msg.get("conversation") or []
-    said = [m["content"].strip() for m in convo
+    said = [fix_name(m["content"].strip()) for m in convo
             if m.get("role") == "assistant" and isinstance(m.get("content"), str) and m["content"].strip()]
-    for exact in said[c["ai_seen"]:]:
+    seen, last = c["ai_seen"], c["ai_last"]
+    # 지금 말하는 마지막 문장은 말하는 동안 길어진다(첫 문장만 먼저 온다) → 같은 말풍선을 늘린다
+    if last is not None and 0 < seen <= len(said) and said[seen - 1] != last["text"] \
+            and _covered(last["text"], said[seen - 1]) >= 0.6:
+        last["text"] = said[seen - 1]
+        if _covered(last["partial"], last["text"]) >= 0.6:
+            last["partial"] = ""
+    for exact in said[seen:]:
         raw = next((t for t in c["turns"] if t["role"] == "ai" and not t.get("exact")
                     and _covered(t["text"] + t["partial"], exact) >= 0.6), None)
         if raw:
             raw.update(text=exact, partial="", exact=True)
         else:  # 아직 말하기 전에 원문이 먼저 왔다
-            c["turns"].append({"role": "ai", "text": exact, "partial": "", "exact": True})
-    c["ai_seen"] = max(c["ai_seen"], len(said))
+            raw = {"role": "ai", "text": exact, "partial": "", "exact": True}
+            c["turns"].append(raw)
+        c["ai_last"] = raw
+    c["ai_seen"] = max(seen, len(said))
 
 
 def _end(c: dict) -> None:
@@ -117,14 +143,15 @@ def update(msg: dict) -> None:
 
 def finish(msg: dict, request_id: str | None, turns: list[dict]) -> None:
     """통화 끝 보고서가 오면 끝으로 표시하고 신청서 번호를 붙인다.
-    통화 중 메시지를 못 받았으면(설정이 꺼져 있으면) 보고서의 대화로 채운다."""
+    보고서의 대화가 가장 완전하므로(실시간 글자는 빠지거나 틀릴 수 있다) 화면 대화를 보고서 대화로 바꾼다."""
     with _LOCK:
         c = _get(msg)
         if c is None:
             return
         _end(c)
-        if not c["turns"]:
-            c["turns"] = [{"role": t["role"], "text": t["text"], "partial": ""} for t in turns]
+        if turns:
+            c["turns"] = [{"role": t["role"], "text": fix_name(t["text"]) if t["role"] == "ai" else t["text"], "partial": ""}
+                          for t in turns]
         c["request_id"], c["skipped"] = request_id, request_id is None
 
 

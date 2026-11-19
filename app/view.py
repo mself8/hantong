@@ -4,7 +4,7 @@ from __future__ import annotations
 from html import escape
 
 from . import store
-from .workflow import APP_STATUSES
+from .workflow import APP_STATUSES, elder_name
 
 STATUS = {"processing": "정리 중", "pending": "확인 대기", "submitted": "기관 회신 대기",
           "confirmed": "안내 대기", "notified": "안내 완료", "held": "보류"}
@@ -46,7 +46,8 @@ def _e(v) -> str:
 
 def _request_html(r: dict) -> str:
     res = r.get("resident") or {}
-    who = f"{res.get('name')} ({res.get('village')})" if res else "명부 확인 필요"
+    name = elder_name(r)
+    who = f"{name} ({res.get('village')})" if res else (name or "등록 정보 없음")
     st = r.get("status", "")
     parts = [f"<section class='req'><div class='head'><span class='badge {st}'>{_e(STATUS.get(st, st))}</span>"
              f"<span class='summary'>{_e(r.get('summary') or '정리 중')}</span></div>"

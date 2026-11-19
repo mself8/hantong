@@ -166,10 +166,16 @@
   function renderTurns(turns) {
     if (turns.length) $("logEmpty")?.remove();
     const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 80;  // 위로 올려 읽는 중이면 따라 내려가지 않는다
+    // 통화가 끝나면 서버가 완성된 대화로 바꿔 보낸다. 말풍선 수나 순서가 달라졌으면 새로 그린다
+    if (turns.length < bubbles.length || bubbles.some((b, i) => b._role !== turns[i].role)) {
+      bubbles.forEach((b) => b.remove());
+      bubbles = [];
+    }
     turns.forEach((t, i) => {
       let b = bubbles[i];
       if (!b) {
         b = document.createElement("div");
+        b._role = t.role;
         b.className = "bubble " + (t.role === "ai" ? "ai" : "elder");
         b.innerHTML = `<div class="who">${t.role === "ai" ? "AI 상담원" : "어르신"}</div><div class="txt"></div>`;
         log.appendChild(b);
@@ -302,7 +308,12 @@
     vapi.on("speech-start", () => { if (state === "live") avatar.classList.add("talking"); });
     vapi.on("speech-end", () => avatar.classList.remove("talking"));
     vapi.on("call-end", () => ended());
-    vapi.on("error", (e) => { console.error(e); ended("연결에 문제가 생겼어요. 다시 걸어 주세요."); });
+    vapi.on("error", (e) => {
+      console.error(e);
+      // 상담원이 인사하고 끊으면 통화방이 닫히면서 'Meeting has ended'(ejected) 오류가 오는데, 정상 종료다
+      if (/ejected|meeting has ended|meeting ended/i.test(JSON.stringify(e || {}))) return ended();
+      ended("연결에 문제가 생겼어요. 다시 걸어 주세요.");
+    });
 
     mute.addEventListener("click", () => {
       const on = !vapi.isMuted(); vapi.setMuted(on);

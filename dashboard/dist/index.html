@@ -33,16 +33,28 @@
   .logo { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
   .org { color: var(--text-2); font-size: 16px; }
   .bar .right { margin-left: auto; display: flex; gap: 12px; align-items: center; color: var(--text-3); font-size: 15px; }
-  .rule { background: var(--muted-soft); color: var(--text-2); border-radius: 999px; padding: 4px 12px; font-size: 14px; }
-
-  /* 상태 탭 */
-  .tabs { max-width: 1440px; margin: 0 auto; padding: 0 28px; display: flex; gap: 4px; overflow-x: auto; }
-  .tab { border: 0; background: none; padding: 14px 14px 12px; font-size: 17px; color: var(--text-3); border-bottom: 3px solid transparent; white-space: nowrap; }
-  .tab b { font-weight: 700; margin-left: 6px; color: var(--text-2); }
-  .tab.on { color: var(--text); font-weight: 600; border-bottom-color: var(--primary); }
-  .tab.on b { color: var(--primary); }
 
   .main { max-width: 1440px; margin: 0 auto; padding: 24px 28px 48px; display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 24px; align-items: start; }
+  .main.folded { grid-template-columns: minmax(0, 1fr); }
+  .main.folded .list { display: none; }
+
+  /* 목록 머리: 접기·펼치기 + 필터 */
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .side-h { display: flex; align-items: center; gap: 8px; }
+  .fold { border: 0; background: none; padding: 6px 4px; font-size: 18px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+  .fold b { color: var(--primary); }
+  .chev { display: inline-block; color: var(--text-3); transition: transform .15s; }
+  .main.folded .fold .chev { transform: rotate(-90deg); }
+  .filter { position: relative; margin-left: auto; }
+  .filter-btn { height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 0 12px; font-size: 15px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px; }
+  .filter-btn b { color: var(--primary); }
+  .menu { position: absolute; right: 0; top: 46px; z-index: 5; min-width: 200px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(16, 24, 40, .12); padding: 6px; display: flex; flex-direction: column; }
+  .menu[hidden] { display: none; }
+  .menu button { border: 0; background: none; text-align: left; padding: 10px 12px; border-radius: 8px; font-size: 16px; display: flex; justify-content: space-between; gap: 16px; }
+  .menu button:hover { background: var(--bg); }
+  .menu button.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
 
   /* 목록 */
   .list { display: flex; flex-direction: column; gap: 10px; }
@@ -92,7 +104,7 @@
   .fact .v small { display: block; font-size: 15px; font-weight: 500; color: var(--text-2); margin-top: 2px; }
   .fact select { width: 100%; margin-top: 8px; height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: #fff; font-size: 16px; }
 
-  section.part { margin-top: 32px; }
+  section.part { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
   section.part > h3 { font-size: 19px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
   section.part > h3 .cnt { color: var(--text-3); font-weight: 500; font-size: 16px; }
 
@@ -116,6 +128,7 @@
   .app .notes li::before { content: "• "; color: var(--warn-line); font-weight: 700; }
   .respond { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 8px; }
   .respond .rl { font-size: 14px; color: var(--text-3); }
+  .regform { margin-top: 10px; }
   .respond .other:not([hidden]) { display: flex; gap: 8px; }
   .respond .other input { flex: 1; min-width: 0; }
   .replies { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -151,8 +164,8 @@
 
   @media (max-width: 980px) {
     .main { grid-template-columns: 1fr; padding: 16px 16px 40px; gap: 16px; }
-    .bar-in { padding: 14px 16px; } .tabs { padding: 0 8px; }
-    .bar .right { margin-left: 0; width: 100%; } .rule { display: none; }
+    .bar-in { padding: 14px 16px; }
+    .bar .right { margin-left: 0; width: 100%; }
     .detail { padding: 20px 18px 24px; border-radius: 16px; }
     .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .act { align-items: stretch; width: 100%; } .primary { width: 100%; }
@@ -165,12 +178,20 @@
 <div class="bar"><div class="bar-in">
   <span class="logo">한 통이면 돼유</span>
   <span class="org">홍천군 통합돌봄 · 읍·면 접수 담당</span>
-  <span class="right"><span id="today" class="num"></span><span class="rule">AI는 정리만 해요 · 결정은 담당자가 해요</span></span>
-</div>
-<nav class="tabs" id="tabs" aria-label="상태별 보기"></nav></div>
+  <span class="right"><span id="today" class="num"></span></span>
+</div></div>
 
-<div class="main">
-  <section class="list" id="list" aria-label="요청 목록"></section>
+<div class="main" id="main">
+  <aside class="side">
+    <div class="side-h">
+      <button class="fold" id="fold" data-act="fold" aria-expanded="true" aria-controls="list">요청 목록 <b class="num" id="cnt"></b><span class="chev" aria-hidden="true">▾</span></button>
+      <div class="filter">
+        <button class="filter-btn" id="filterBtn" data-act="filter" aria-haspopup="listbox" aria-expanded="false"></button>
+        <div class="menu" id="menu" role="listbox" aria-label="상태별 보기" hidden></div>
+      </div>
+    </div>
+    <section class="list" id="list" aria-label="요청 목록"></section>
+  </aside>
   <section class="detail" id="detail" aria-live="polite"><p class="empty">왼쪽에서 요청을 고르세요.</p></section>
 </div>
 <div class="toast" id="toast" role="status"></div>
@@ -206,9 +227,9 @@ async function act(path, body, method, done) {
   } catch (e) { toast(e.message); return false; }
 }
 // 값을 채운 신청서 묶음(통합지원 신청서 + 기관별 신청서) PDF를 내려받는다
-function download(id) {
+function download(id, kind) {
   const a = document.createElement("a");
-  a.href = `/api/requests/${encodeURIComponent(id)}/forms.pdf`; a.download = "";
+  a.href = `/api/requests/${encodeURIComponent(id)}/forms/${kind}.pdf`; a.download = "";
   document.body.appendChild(a); a.click(); a.remove();
 }
 
@@ -221,17 +242,22 @@ async function loadList() {
   listSig = sig; items = next;
   renderTabs(); renderList();
 }
+// 필터 버튼: 누르면 상태 메뉴가 열리고, 고르면 목록이 그 상태만 보인다
 function renderTabs() {
   const n = (k) => k === "all" ? items.length : items.filter((r) => r.status === k).length;
-  $("tabs").innerHTML = TABS.map(([k, label]) => `<button class="tab ${k === tab ? "on" : ""}" data-tab="${k}">${label}<b class="num">${n(k)}</b></button>`).join("");
+  const [cur, label] = TABS.find(([k]) => k === tab) || TABS[0];
+  $("filterBtn").innerHTML = `필터 · ${label}<span class="chev" aria-hidden="true">▾</span>`;
+  $("menu").innerHTML = TABS.map(([k, l]) => `<button role="option" aria-selected="${k === tab}" class="${k === tab ? "on" : ""}" data-tab="${k}">${l}<b class="num">${n(k)}</b></button>`).join("");
+  $("cnt").textContent = `${n(cur)}건`;
 }
+function openMenu(open) { $("menu").hidden = !open; $("filterBtn").setAttribute("aria-expanded", String(open)); }
 function renderList() {
   const rows = items.filter((r) => tab === "all" || r.status === tab);
   if (!rows.length) { $("list").innerHTML = `<p class="empty">이 상태의 요청이 없어요.</p>`; return; }
   $("list").innerHTML = rows.map((r) => {
     const res = r.resident || {};
-    const name = res.name ? `${res.name} 어르신` : "명부 확인 필요";
-    const where = res.village || (r.pickup && r.pickup.village) || "";
+    const name = r.display_name ? `${r.display_name} 어르신` : "등록 정보 없음";
+    const where = (r.pickup && r.pickup.village) || res.village || "";  // 통화에서 말한 곳이 먼저
     const w = warnCount(r);
     return `<button class="row ${r.id === selected ? "on" : ""}" data-id="${esc(r.id)}">
       <div><span class="who">${esc(name)}</span><span class="where">${esc(where)}</span></div>
@@ -292,10 +318,11 @@ function renderDetail() {
     return `<article class="app"><div class="app-h"><div class="n"><b>${esc(a.label)}</b><span>${esc(a.agency)} · <span class="num">${esc(a.contact)}</span></span></div>
         ${badge(a.status === "draft" ? "draft" : a.status, APP_STATUS[a.status] || a.status)}</div>
       <dl class="kv">${main}</dl>${notes ? `<ul class="notes">${notes}</ul>` : ""}
+      ${a.type === "special_transport" && r.needs_registration ? `<button class="linkbtn regform" data-act="form" data-kind="special_transport">특별교통수단 등록 신청서 PDF ↓</button>` : ""}
       ${resp}</article>`;
   }).join("");
   const appsPart = `<section class="part"><h3>기관에 요청할 것 <span class="cnt">${(r.applications || []).length}건</span>
-      <button class="btn" style="margin-left:auto;height:38px;font-size:15px" data-act="pdf">공식 신청서 PDF</button></h3>
+      <button class="btn" style="margin-left:auto;height:38px;font-size:15px" data-act="form" data-kind="integrated">통합지원 신청서 PDF</button></h3>
     ${apps ? `<div class="apps">${apps}</div>` : `<p class="note">기관에 요청할 것이 없는 건이에요.</p>`}</section>`;
 
   const m = r.message;
@@ -310,8 +337,8 @@ function renderDetail() {
   const turns = (r.transcript || []).map((t) => `<div class="turn ${t.role === "elder" ? "elder" : "ai"}"><i>${t.role === "elder" ? "어르신" : "AI 상담원"}</i>${esc(t.text)}</div>`).join("");
 
   $("detail").innerHTML = `
-    <div class="dh"><div class="t"><h2>${esc(res.name ? `${res.name} 어르신` : "명부 확인 필요")}${res.age ? ` <span class="num" style="font-weight:500;color:var(--text-2)">(${res.age})</span>` : ""}</h2>
-      <div class="sub">${badge(r.status, STATUS[r.status] || r.status)} <span class="num">${md(r.created_at)} ${hhmm(r.created_at)}</span> 전화${res.village ? " · " + esc(res.village) : ""}</div></div>
+    <div class="dh"><div class="t"><h2>${esc(r.display_name ? `${r.display_name} 어르신` : "등록 정보 없음")}${res.age ? ` <span class="num" style="font-weight:500;color:var(--text-2)">(${res.age})</span>` : ""}</h2>
+      <div class="sub">${badge(r.status, STATUS[r.status] || r.status)} <span class="num">${md(r.created_at)} ${hhmm(r.created_at)}</span> 전화${(r.pickup && r.pickup.village) || res.village ? " · " + esc((r.pickup && r.pickup.village) || res.village) : ""}</div></div>
       <div class="act">${action(r)}</div></div>
     <div class="facts">${tile("가는 날", F.date)}${tile("병원", F.hospital, pick)}${tile("교통수단", F.transport)}${tile("진료 시각", F.time)}${tile("필요한 도움", F.companion)}${tile("사는 곳", F.place)}</div>
     ${callout}${appsPart}${msgPart}
@@ -328,15 +355,22 @@ async function select(id, tapped = false) {
 }
 
 document.addEventListener("click", (e) => {
+  if (!e.target.closest(".filter")) openMenu(false);  // 메뉴 밖을 누르면 닫는다
   const t = e.target.closest("[data-tab],[data-id],[data-act]");
   if (!t) return;
-  if (t.dataset.tab) { tab = t.dataset.tab; renderTabs(); renderList(); return; }
+  if (t.dataset.tab) { tab = t.dataset.tab; openMenu(false); renderTabs(); renderList(); return; }
+  if (t.dataset.act === "filter") { openMenu($("menu").hidden); return; }
+  if (t.dataset.act === "fold") {  // 요청 목록 접기·펼치기 (상세는 늘 보인다)
+    const folded = $("main").classList.toggle("folded");
+    $("fold").setAttribute("aria-expanded", String(!folded));
+    return;
+  }
   if (t.dataset.id) { select(t.dataset.id, true); return; }
   if (!current) return;
   const base = `/api/requests/${encodeURIComponent(current.id)}`;
   switch (t.dataset.act) {
-    case "submit": { const id = current.id; act(`${base}/submit`, null, "POST", "신청서를 제출했어요 · PDF를 내려받아요").then((ok) => ok && download(id)); break; }
-    case "pdf": download(current.id); break;
+    case "submit": act(`${base}/submit`, null, "POST", "기관에 요청했다고 기록했어요"); break;
+    case "form": download(current.id, t.dataset.kind); break;
     case "send": act(`${base}/message/send`, null, "POST", "안내 문자를 보냈어요 (시연: 발송 기록)"); break;
     case "editmsg": editMsg = true; renderDetail(); break;
     case "cancelmsg": editMsg = false; renderDetail(); break;

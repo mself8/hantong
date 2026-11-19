@@ -69,7 +69,7 @@ def test_vapi_call_to_confirmation_message():
     # 수하리는 확인된 희망택시 마을이 아니고 휠체어도 필요 없어서 병원동행 요청 하나만 만든다
     assert [a["type"] for a in req["applications"]] == ["companion"]
     app = req["applications"][0]
-    assert app["status"] == "draft" and app["fields"]["어르신"] == "한○○"
+    assert app["status"] == "draft" and app["fields"]["어르신"] == "한옥순"
 
     # 병원을 고르면 아직 제출하지 않은 신청서가 그 병원으로 다시 채워진다
     hosp_id = req["hospital"]["candidates"][0]["id"]
@@ -87,7 +87,7 @@ def test_vapi_call_to_confirmation_message():
     assert req["status"] == "confirmed"
     assert "동행 매니저가 9시에 댁으로 찾아갑니다." in req["message"]["text"]
     assert "요금: 첫 1시간 5,000원" in req["message"]["text"]  # 확정 안내문에 요금이 붙는다
-    assert req["message"]["text"].startswith("한○○ 어르신,")
+    assert req["message"]["text"].startswith("한옥순 어르신,")
 
     req = client.put(f"/api/requests/{rid}/message", json={"text": "고친 안내문"}).json()
     assert req["message"]["text"] == "고친 안내문"
@@ -238,17 +238,43 @@ def test_unheard_village_and_changed_date_are_flagged(monkeypatch):
     assert req["hospital"]["department"] == "내과" and req["hospital"]["basis"] == "department"
 
 
-def test_pdf_bundle_has_official_forms():
+def test_official_forms_download_one_at_a_time():
     import fitz
     body = report(dict(FIELDS, wheelchair_needed="yes"))
     rid = client.post("/vapi/webhook", json=body).json()["id"]
-    r = client.get(f"/api/requests/{rid}/forms.pdf")
-    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
-    doc = fitz.open(stream=r.content, filetype="pdf")
-    text = "".join(p.get_text() for p in doc)
-    # 공식 양식만: 통합지원 신청서 2쪽 + 특별교통수단 미등록이라 등록 신청서 4쪽 (우리가 만든 양식은 넣지 않는다)
-    assert doc.page_count == 6, doc.page_count
-    assert "통합지원" in text and "한○○" in text and "등록 신청서" in text
+    assert client.get(f"/api/requests/{rid}").json()["needs_registration"]  # 미등록이라 등록 신청서가 필요
+    pages = {}
+    for kind in ("integrated", "special_transport"):
+        r = client.get(f"/api/requests/{rid}/forms/{kind}.pdf")
+        assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
+        doc = fitz.open(stream=r.content, filetype="pdf")
+        pages[kind] = (doc.page_count, "".join(p.get_text() for p in doc))
+    assert pages["integrated"][0] == 2 and "통합지원" in pages["integrated"][1] and "한옥순" in pages["integrated"][1]
+    assert pages["special_transport"][0] == 4 and "등록 신청서" in pages["special_transport"][1]
+    assert client.get(f"/api/requests/{rid}/forms/companion.pdf").status_code == 404  # 우리가 지어낸 양식은 없다
+
+
+def test_spoken_name_is_used_and_checked_against_the_roster():
+    rid = client.post("/vapi/webhook", json=report(dict(FIELDS, caller_name="김순자"))).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert req["display_name"] == "김순자" and req["applications"][0]["fields"]["어르신"] == "김순자"
+    assert any(c["type"] == "name_mismatch" for c in req["checks"])  # 이 번호로 등록된 이름(한옥순)과 다르다
+
+
+def test_town_only_is_kept_instead_of_roster_village():
+    rid = client.post("/vapi/webhook", json=report(dict(FIELDS, village="홍천읍", address_detail="터미널 근처"))).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert req["pickup"]["village"] == "홍천읍"                         # 등록된 주소(서석면 풍암리)로 바꾸지 않는다
+    assert any(c["type"] == "village_town_only" for c in req["checks"])
+    assert req["facts"]["place"]["why"] == "읍·면까지만 들었어요" and req["facts"]["transport"]["level"] == "check"
+
+
+def test_stored_ai_turns_use_our_service_name():
+    body = report()
+    body["message"]["artifact"]["messages"][1] = {"role": "bot", "message": "안녕하세요, 홍천군 한통의면 대유AI 상담원입니다."}
+    rid = client.post("/vapi/webhook", json=body).json()["id"]
+    ai = [t["text"] for t in client.get(f"/api/requests/{rid}").json()["transcript"] if t["role"] == "ai"]
+    assert "안녕하세요, 홍천군 '한 통이면 돼유' AI 상담원입니다." in ai
 
 
 def test_agency_other_reply_is_kept_as_memo():
@@ -268,7 +294,7 @@ def test_tiles_always_have_a_value_and_say_how_sure():
     assert f["date"]["level"] == "ok" and f["date"]["sub"] == "담주 화요일"        # 말한 표현을 규칙으로 계산한 날짜
     assert f["time"] == {"value": "모름", "sub": "", "level": "missing", "why": "통화에서 진료 시각이 나오지 않았어요"}
     assert f["hospital"]["level"] == "check" and f["hospital"]["value"]             # 후보가 있으면 첫 후보를 보여 준다
-    assert f["place"]["level"] == "check" and f["place"]["why"] == "명부와 마을이 달라요"
+    assert f["place"]["level"] == "check" and f["place"]["why"] == "등록된 주소와 달라요"
     assert f["transport"]["level"] == "check"                                       # 마을이 엇갈리면 교통수단도 확인 필요
     assert f["companion"] == {"value": "병원동행", "sub": "같이 가 드릴 분 필요", "level": "ok", "why": None}
     hid = client.get(f"/api/requests/{rid}").json()["hospital"]["candidates"][0]["id"]
