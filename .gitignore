@@ -1,0 +1,27 @@
+# 비밀값
+.env
+.env.*
+!.env.example
+
+# 파이썬
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 로컬 DB
+*.db
+*.sqlite
+
+# 레포에 넣지 않는 데이터: AI Hub(재배포·국외 반출 금지), 원본 대용량 파일, 음성
+aihub/
+data/raw/
+*.zip
+*.wav
+*.mp3
+
+# 프론트엔드
+node_modules/
+dashboard/dist/
+
+.DS_Store
