@@ -1,6 +1,7 @@
 """한 통이면 돼유 서버: Vapi 통화 기록을 받아 신청서를 만들고, 대시보드에 API를 준다."""
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from .data import hospitals, villages
 load_dotenv()  # 로컬에서만 .env를 읽는다. Railway는 환경변수를 직접 넣는다.
 
 app = FastAPI(title="한 통이면 돼유")
+log = logging.getLogger("uvicorn.error")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 STATUSES = {"processing": "정리 중", "pending": "확인 대기", "submitted": "기관 회신 대기",
@@ -43,8 +45,10 @@ async def vapi_webhook(request: Request, bg: BackgroundTasks,
     turns, call, caller = pipeline.parse_vapi_report(msg)
     if not any(t["role"] == "elder" for t in turns):
         return {"ok": True, "skipped": "어르신 말이 없는 통화"}
-    req = pipeline.new_request(turns, source="phone", call=call, caller=caller,
-                               prefill=pipeline.vapi_structured(msg))
+    prefill = pipeline.vapi_structured(msg)
+    # 첫 통화 점검용: 내용은 남기지 않고 어떤 칸이 왔는지만 남긴다
+    log.info("vapi report: artifact=%s structured=%s", sorted((msg.get("artifact") or {}).keys()), bool(prefill))
+    req = pipeline.new_request(turns, source="phone", call=call, caller=caller, prefill=prefill)
     bg.add_task(pipeline.process, req["id"])
     return {"ok": True, "id": req["id"]}
 

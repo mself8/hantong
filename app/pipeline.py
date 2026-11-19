@@ -1,6 +1,7 @@
 """통화 기록 → 신청서. 저장, 항목 뽑기, 목록 맞추기, 규칙 점검을 차례로 한다."""
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -186,11 +187,16 @@ def parse_text(text: str) -> list[dict]:
 
 def vapi_structured(msg: dict) -> dict | None:
     """Vapi 구조화 출력(통화 뒤 GPT가 신청서 형식대로 뽑은 값)을 찾는다. 없으면 None."""
-    artifact = msg.get("artifact") or {}
+    artifact = msg.get("artifact") or (msg.get("call") or {}).get("artifact") or {}
     outputs = artifact.get("structuredOutputs") or msg.get("structuredOutputs") or {}
     items = list(outputs.values()) if isinstance(outputs, dict) else list(outputs)
     for it in items:
         result = it.get("result", it) if isinstance(it, dict) else None
+        if isinstance(result, str):  # 결과가 JSON 글로 올 때
+            try:
+                result = json.loads(result)
+            except ValueError:
+                continue
         if isinstance(result, dict) and "intent" in result:
             return result
     data = (msg.get("analysis") or {}).get("structuredData")
@@ -256,6 +262,8 @@ def choose_hospital(rid: str, hosp_id: str) -> dict:
     today = date.fromisoformat(req["created_at"][:10])
     extra = [c for c in req.get("checks", []) if c["type"] in ("village_mismatch", "date_mismatch")]
     req["checks"] = run_checks(req, today) + extra
+    if (req.get("message") or {}).get("status") != "sent":
+        req["message"] = None  # 바뀐 병원으로 안내문을 다시 만든다
     kept = [a for a in req.get("applications") or [] if a["status"] != "draft"]
     fresh = [a for a in build_applications(req) if a["type"] not in {k["type"] for k in kept}]
     req["applications"] = kept + fresh

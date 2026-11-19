@@ -127,3 +127,22 @@ def test_text_request_and_failure_is_kept(monkeypatch):
 
 def test_other_vapi_events_are_ignored():
     assert client.post("/vapi/webhook", json={"message": {"type": "status-update"}}).json() == {"ok": True}
+
+
+def test_no_agency_needed_gets_message_draft(monkeypatch):
+    """기관 신청이 필요 없으면 바로 안내문 초안을 만들고, 공무원이 보내면 끝난다."""
+    monkeypatch.setattr(extract_mod, "extract",
+                        lambda turns, today: Extraction(**{**FIELDS, "companion_needed": "no"}))
+    rid = client.post("/vapi/webhook", json=report()).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert req["applications"] == [] and req["status"] == "pending"
+    assert "말씀하신 내용 잘 받았습니다." in req["message"]["text"]
+    req = client.post(f"/api/requests/{rid}/message/send").json()
+    assert req["status"] == "notified"
+
+
+def test_structured_output_as_json_text():
+    import json
+    rid = client.post("/vapi/webhook", json=report(json.dumps(FIELDS, ensure_ascii=False))).json()["id"]
+    req = client.get(f"/api/requests/{rid}").json()
+    assert "신청서 초안 작성 (Vapi가 뽑은 항목으로)" in [h["note"] for h in req["history"]]

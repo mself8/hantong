@@ -119,20 +119,26 @@ def build_applications(req: dict) -> list[dict]:
 
 
 def refresh_status(req: dict) -> None:
-    """기관별 신청서 상태로 신청 전체 상태를 정한다. 보류와 안내 완료는 그대로 둔다."""
+    """기관별 신청서 상태로 신청 전체 상태를 정한다. 보류와 안내 완료는 그대로 둔다.
+
+    안내문 초안은 기관이 모두 답했을 때 만든다. 기관 신청이 필요 없는 병원 방문은 바로 만든다.
+    """
     if req.get("status") in ("held", "notified", "processing"):
         return
     apps = req.get("applications") or []
     states = {a["status"] for a in apps}
-    if not apps or states <= {"confirmed", "rejected"}:
-        if apps and req.get("message") is None:
-            req["message"] = {"status": "draft", "text": confirmation_text(req), "channel": "기록",
-                              "history": [_event("draft", "확정 안내문 자동 작성")]}
-        req["status"] = "confirmed" if apps else req.get("status", "pending")
-    elif "draft" in states:
+    if "draft" in states:
         req["status"] = "pending"
-    else:
+    elif "submitted" in states:
         req["status"] = "submitted"
+    elif apps:
+        req["status"] = "confirmed"
+    else:
+        req["status"] = "pending"
+    ready = req["status"] == "confirmed" or (not apps and req.get("intent") == "hospital_visit")
+    if ready and req.get("message") is None:
+        req["message"] = {"status": "draft", "text": confirmation_text(req), "channel": "기록",
+                          "history": [_event("draft", "안내문 자동 작성")]}
 
 
 SHORT = {"companion": "병원동행", "hope_taxi": "희망택시", "special_transport": "특별교통수단"}
@@ -157,5 +163,7 @@ def confirmation_text(req: dict) -> str:
             lines.append(f"{SHORT[a['type']]}: {resp.get('detail') or '확정되었습니다.'}")
         elif a["status"] == "rejected":
             lines.append(f"{_topic(SHORT[a['type']])} 이번에는 어렵습니다. 담당자가 다시 연락드리겠습니다.")
+    if not req.get("applications"):
+        lines.append("말씀하신 내용 잘 받았습니다.")
     lines.append("전날 다시 연락드리겠습니다.")
     return "\n".join(lines)
