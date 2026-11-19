@@ -1,0 +1,96 @@
+{
+  "name": "hantong_request",
+  "description": "어르신 전화 통화에서 병원 가는 날 신청서 항목을 뽑는다. 어르신이 실제로 말한 것만 옮기고, 말하지 않은 칸은 비운다. 병원 이름은 지어내지 않는다.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "intent": {
+        "type": "string",
+        "enum": [
+          "hospital_visit",
+          "medication",
+          "cancel",
+          "companion",
+          "other"
+        ],
+        "description": "hospital_visit=병원 가는 날 신청, medication=약 먹는 법 문의, cancel=신청 취소, companion=동행만 문의, other=그 밖의 말"
+      },
+      "hospital_query": {
+        "type": "string",
+        "description": "어르신이 말한 병원 표현 그대로. 예: '읍내 정형외과', '아산병원'"
+      },
+      "department": {
+        "type": "string",
+        "description": "진료과. 어르신이 말했거나 아픈 곳으로 분명할 때만. 예: 눈→안과"
+      },
+      "date_expr": {
+        "type": "string",
+        "description": "어르신이 말한 날짜 표현 그대로. 예: '담주 화요일'"
+      },
+      "date": {
+        "type": "string",
+        "description": "통화일 기준으로 계산한 진료 날짜 YYYY-MM-DD. 범위이거나 애매하면 null"
+      },
+      "time_expr": {
+        "type": "string",
+        "description": "어르신이 말한 시간 표현 그대로. 예: '열 시 반', '오전'"
+      },
+      "companion_needed": {
+        "type": "string",
+        "enum": [
+          "yes",
+          "no",
+          "unknown"
+        ],
+        "description": "같이 가 줄 사람이 필요하다고 했으면 yes, 혼자 갈 수 있다고 했으면 no, 말이 없으면 unknown"
+      },
+      "companion_reason": {
+        "type": "string",
+        "description": "동행이 필요한 이유를 어르신 말로. 예: '무릎이 아파서'"
+      },
+      "wheelchair_needed": {
+        "type": "string",
+        "enum": [
+          "yes",
+          "no",
+          "unknown"
+        ],
+        "description": "휠체어를 타야 하거나 휠체어 차량이 필요하다고 했으면 yes, 아니라고 했으면 no, 말이 없으면 unknown"
+      },
+      "village": {
+        "type": "string",
+        "description": "어르신이 사는 마을(리) 표현 그대로. 예: '수하리'"
+      },
+      "mobility": {
+        "type": "string",
+        "description": "거동 상태를 말했으면 그대로. 예: '지팡이 짚어요'"
+      },
+      "evidence_hospital": {
+        "type": "string",
+        "description": "병원 값의 근거가 된 어르신 말 원문 조각"
+      },
+      "evidence_date": {
+        "type": "string",
+        "description": "날짜 값의 근거가 된 어르신 말 원문 조각"
+      },
+      "evidence_companion": {
+        "type": "string",
+        "description": "동행 값의 근거가 된 어르신 말 원문 조각"
+      },
+      "evidence_village": {
+        "type": "string",
+        "description": "마을 값의 근거가 된 어르신 말 원문 조각"
+      },
+      "summary": {
+        "type": "string",
+        "description": "공무원이 볼 한 줄 요약. 예: '11/24(화) 홍천읍 정형외과, 동행 필요(무릎 통증)'"
+      }
+    },
+    "required": [
+      "intent",
+      "companion_needed",
+      "wheelchair_needed",
+      "summary"
+    ]
+  }
+}
