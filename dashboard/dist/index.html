@@ -132,7 +132,7 @@
   .turn.ai { background: var(--bg); align-self: flex-start; }
   .turn.elder { background: var(--primary-soft); align-self: flex-end; }
   .turn i { display: block; font-style: normal; font-size: 13px; color: var(--text-3); }
-  .log-box { background: #fff; border: 1px solid var(--line-soft); border-radius: 14px; padding: 16px; margin-top: 0; max-height: 520px; overflow-y: auto; }
+  .log-box { background: #fff; border: 1px solid var(--line-soft); border-radius: 14px; padding: 16px; margin-top: 0; }
   .foot { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line-soft); display: flex; justify-content: flex-end; }
   .foot .linkbtn { color: var(--text-3); }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: #fff; padding: 12px 18px; border-radius: 12px;
@@ -195,8 +195,13 @@ async function act(path, body, method, done) {
   } catch (e) { toast(e.message); }
 }
 
+let listSig = "";
 async function loadList() {
-  try { items = await api("/api/requests"); } catch (e) { return; }
+  let next;
+  try { next = await api("/api/requests"); } catch (e) { return; }
+  const sig = JSON.stringify(next);
+  if (sig === listSig) return;  // 바뀐 게 없으면 다시 그리지 않는다
+  listSig = sig; items = next;
   renderTabs(); renderList();
 }
 function renderTabs() {
@@ -338,7 +343,10 @@ async function tick() {
     const first = items.find((r) => tab === "all" || r.status === tab) || items[0];
     await select(first.id);
   } else if (selected && !editing && !editMsg) {
-    try { current = await api(`/api/requests/${encodeURIComponent(selected)}`); renderDetail(); } catch (e) {}
+    try {
+      const next = await api(`/api/requests/${encodeURIComponent(selected)}`);
+      if (JSON.stringify(next) !== JSON.stringify(current)) { current = next; renderDetail(); }
+    } catch (e) {}
   }
 }
 const now = new Date();
