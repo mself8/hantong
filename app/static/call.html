@@ -256,8 +256,8 @@
     resetLog("전화가 오면 대화가 여기에 실시간으로 나와요");
     statusEl.textContent = waiting;
     follow("/api/live", (s) => {
-      // 보고 있던 통화는 끝나고 1분까지 두고, 새로 연 화면에는 끝난 지 15초 넘은 지난 통화(시험 기록)를 띄우지 않는다
-      const limit = s && s.id === shown ? 60 : 15;
+      // 보고 있던 통화는 끝나고 30초까지 두고, 새로 연 화면에는 끝난 지 15초 넘은 지난 통화(시험 기록)를 띄우지 않는다
+      const limit = s && s.id === shown ? 30 : 15;
       const fresh = s && s.id && s.id !== dismissed && !(s.ended && s.ended_ago > limit);
       if (!fresh) {
         if (shown) { shown = null; doneAt = 0; resetLog("전화가 오면 대화가 여기에 실시간으로 나와요"); statusEl.textContent = waiting; avatar.classList.remove("talking"); }
