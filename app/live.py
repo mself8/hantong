@@ -29,7 +29,8 @@ def _join_breaks(text: str) -> str:
     문장 끝(…다·요·까·죠)이 아닌 곳의 마침표는 지우고, 그렇게 끊겼던 자리 뒤의 조사는 앞말에 붙인다."""
     out, broke = [], False
     for w in text.split():
-        cut = w.endswith(".") and not w.endswith("..") and len(w) > 1 and not w[:-1].rstrip("'\")]").endswith(_FINAL)
+        cut = (w.endswith(".") and not w.endswith("..") and len(w) > 1 and not w[:-1].rstrip("'\")]").endswith(_FINAL)
+               and not (len(w) == 2 and out and out[-1].endswith(",")))  # '정, 송, 윤.'처럼 한 글자씩 되읽은 끝은 둔다
         core = w[:-1] if cut else w
         if out and broke and core in _PARTICLE:
             out[-1] += core
