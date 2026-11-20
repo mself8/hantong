@@ -252,19 +252,25 @@
     document.title = "한 통이면 돼유 · 실시간 통화";
     showTalk();
     const waiting = cfg.phone ? `전화 기다리는 중 · ${cfg.phone}` : "전화 기다리는 중";
-    let shown = null, base = 0, fetchedAt = 0, ended = true, kind = "phone";
+    let shown = null, dismissed = null, doneAt = 0, base = 0, fetchedAt = 0, ended = true, kind = "phone";
     resetLog("전화가 오면 대화가 여기에 실시간으로 나와요");
     statusEl.textContent = waiting;
     follow("/api/live", (s) => {
-      const fresh = s && s.id && !(s.ended && s.ended_ago > 600);  // 끝난 지 10분 지난 통화는 내린다
+      // 보고 있던 통화는 끝나고 1분까지 두고, 새로 연 화면에는 끝난 지 15초 넘은 지난 통화(시험 기록)를 띄우지 않는다
+      const limit = s && s.id === shown ? 60 : 15;
+      const fresh = s && s.id && s.id !== dismissed && !(s.ended && s.ended_ago > limit);
       if (!fresh) {
-        if (shown) { shown = null; resetLog("전화가 오면 대화가 여기에 실시간으로 나와요"); statusEl.textContent = waiting; avatar.classList.remove("talking"); }
+        if (shown) { shown = null; doneAt = 0; resetLog("전화가 오면 대화가 여기에 실시간으로 나와요"); statusEl.textContent = waiting; avatar.classList.remove("talking"); }
         return;
       }
-      if (s.id !== shown) { shown = s.id; resetLog("연결되면 대화가 여기에 글자로 나와요"); }
+      if (s.id !== shown) { shown = s.id; doneAt = 0; resetLog("연결되면 대화가 여기에 글자로 나와요"); }
       renderTurns(s.turns);
       renderConfirmed(s.slots);
       if (s.ended) renderHandoff(s); else handoff.hidden = true;
+      if (s.ended && (s.summary || s.skipped)) {  // '담당자에게 전달'이 뜨고 5초 뒤 대기 화면으로 돌아간다
+        if (!doneAt) doneAt = Date.now();
+        else if (Date.now() - doneAt > 5000) dismissed = s.id;
+      }
       const last = s.turns[s.turns.length - 1];
       avatar.classList.toggle("talking", !s.ended && !!last && last.role === "ai" && !!last.partial);
       base = s.elapsed; fetchedAt = Date.now(); ended = s.ended; kind = s.kind;
