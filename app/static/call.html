@@ -279,16 +279,22 @@
   } else {
     // ── 웹 통화(/call) ──
     // 신호음(한국 통화 연결음: 440+480Hz, 1초 울리고 2초 쉼)
-    let ac = null, ringTimer = null;
+    let ac = null, ringTimer = null, ringStarted = 0;
     function ring(on) {
       if (!on) { clearInterval(ringTimer); ringTimer = null; if (ac) { ac.close(); ac = null; } return; }
       ac = new (window.AudioContext || window.webkitAudioContext)();
+      ac.resume?.();  // 브라우저에 따라 멈춘 상태로 만들어져 소리가 안 나는 때가 있어, 누른 순간 바로 켠다
+      ringStarted = Date.now();
       const beep = () => {
-        const g = ac.createGain(); g.gain.value = 0.08; g.connect(ac.destination);
+        if (!ac) return;
+        if (ac.state !== "running") ac.resume?.();  // 마이크 권한 창 등으로 끊겼으면 다시 켠다
+        const g = ac.createGain(); g.gain.value = 0.15; g.connect(ac.destination);
         for (const f of [440, 480]) { const o = ac.createOscillator(); o.frequency.value = f; o.connect(g); o.start(); o.stop(ac.currentTime + 1); }
       };
       beep(); ringTimer = setInterval(beep, 3000);
     }
+    // 바로 연결돼도 '띠리링' 한 번(1초)은 끝까지 들려준다
+    const ringStopSoon = () => setTimeout(() => ring(false), Math.max(0, 1000 - (Date.now() - ringStarted)));
 
     let Vapi;
     try { const mod = await import("https://esm.sh/@vapi-ai/web@3.1.0"); Vapi = mod.default?.default ?? mod.default; }
@@ -316,7 +322,7 @@
     };
     vapi.on("call-start", () => {
       if (cancelled) { try { vapi.end(); } catch (e) {} return; }  // 신호음 중에 취소했는데 뒤늦게 연결되면 바로 끊는다
-      ring(false); setState("live"); started = Date.now(); btn.disabled = false;
+      ringStopSoon(); setState("live"); started = Date.now(); btn.disabled = false;
       statusEl.textContent = "통화 중 00:00";
       timer = setInterval(() => { statusEl.textContent = "통화 중 " + mmss(Math.floor((Date.now() - started) / 1000)); }, 500);
     });
