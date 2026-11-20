@@ -19,13 +19,31 @@ _LOCK = threading.Lock()
 _CALLS: dict[str, dict] = {}
 KEEP_SECONDS = 2 * 3600  # 두 시간 지난 통화는 지운다
 _NOT_CHAR = re.compile(r"[^0-9A-Za-z가-힣]")
-_BRAND = re.compile(r"'?한[\s.,]*통[\s.,]*[이의에][\s.,]*면[\s.,]*[대돼되][\s.,]*유우*~*'?")  # '한통이. 면 대유'처럼 끊겨도, 첫인사의 '돼유우~'도
+_BRAND = re.compile(r"'?한[\s.,]*통[\s.,]*[이의에][\s.,]*면[\s.,]*[대돼되][\s.,]*(?:유우*|요)~*'?")  # '한통이. 면 대유'처럼 끊겨도, 첫인사의 '돼유우~'·'돼요'도
+_FINAL = ("다", "요", "까", "죠", "네", "예")  # 존댓말 문장 끝. 이걸로 끝난 낱말 뒤 마침표만 문장 끝으로 본다
+_PARTICLE = {"을", "를", "이", "가", "은", "는", "에", "에서", "도", "만", "까지", "로", "으로", "와", "과", "의", "께", "나", "이나", "랑"}
+
+
+def _join_breaks(text: str) -> str:
+    """AI 목소리를 다시 받아 적으면 작은 쉼마다 마침표가 찍혀 '사시는 곳. 을. 면.'처럼 토막 난다.
+    문장 끝(…다·요·까·죠)이 아닌 곳의 마침표는 지우고, 그렇게 끊겼던 자리 뒤의 조사는 앞말에 붙인다."""
+    out, broke = [], False
+    for w in text.split():
+        cut = w.endswith(".") and not w.endswith("..") and len(w) > 1 and not w[:-1].rstrip("'\")]").endswith(_FINAL)
+        core = w[:-1] if cut else w
+        if out and broke and core in _PARTICLE:
+            out[-1] += core
+        else:
+            out.append(core)
+        broke = cut
+    return " ".join(out)
 
 
 def fix_name(text: str) -> str:
-    """AI 목소리를 받아 적으면 서비스 이름이 '한통의면 대유'처럼 틀린다. 우리 이름으로 바로잡는다."""
+    """AI 목소리를 받아 적으면 서비스 이름이 '한통의면 대유'처럼 틀리고, 쉼마다 마침표가 찍힌다. 둘 다 바로잡는다."""
     text = _BRAND.sub("'한 통이면 돼유'", text or "")
-    return re.sub(r"'한 통이면 돼유'(?=[0-9A-Za-z가-힣])", "'한 통이면 돼유' ", text)
+    text = re.sub(r"'한 통이면 돼유'(?=[0-9A-Za-z가-힣])", "'한 통이면 돼유' ", text)
+    return _join_breaks(text)
 
 
 def _norm(s: str) -> str:

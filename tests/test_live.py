@@ -96,7 +96,23 @@ def test_report_replaces_live_turns_and_fixes_name():
 
 
 def test_service_name_fixed_even_when_split_by_punctuation():
-    assert live.fix_name("안녕하세요, 홍천. 한통이. 면 대유 AI 상담원입니다.") == "안녕하세요, 홍천. '한 통이면 돼유' AI 상담원입니다."
+    assert live.fix_name("안녕하세요, 홍천. 한통이. 면 대유 AI 상담원입니다.") == "안녕하세요, 홍천 '한 통이면 돼유' AI 상담원입니다."  # 쉼에 찍힌 '홍천.'의 마침표도 지운다
     # 첫인사는 사투리 느낌으로 끝을 끈다('돼유우~'). 화면에는 이름만 깔끔하게 보인다.
     assert live.fix_name("안녕하세요. 한 통이면 돼유우~ AI 상담원입니다.") == "안녕하세요. '한 통이면 돼유' AI 상담원입니다."
     assert live.fix_name("안녕하세요. 한통이면 되유우 AI 상담원입니다.") == "안녕하세요. '한 통이면 돼유' AI 상담원입니다."
+
+
+def test_ai_text_breaks_from_transcription_are_joined():
+    # AI 목소리를 다시 받아 적으면 쉼마다 마침표가 찍힌다. 문장 끝이 아닌 마침표는 지우고 떨어진 조사는 붙인다.
+    assert live.fix_name("먼저 사시는 곳. 을. 면. 리. 번지. 까지. 말씀해 주세요.") == "먼저 사시는 곳을 면 리 번지까지 말씀해 주세요."
+    assert live.fix_name("성함이 어떻게. 되세요?") == "성함이 어떻게 되세요?"
+    assert live.fix_name("11월 27일. 금요일. 오전. 10시로 적었습니다.") == "11월 27일 금요일 오전 10시로 적었습니다."
+    # 진짜 문장 끝(…다·요·까)과 '네.'는 그대로 둔다
+    assert live.fix_name("네. 혼자 가실 수 있으세요? 담당자가 확인할게요. 신청 받았습니다.") == "네. 혼자 가실 수 있으세요? 담당자가 확인할게요. 신청 받았습니다."
+    # 쉼표 뒤의 '이'(이 전화는)는 조사로 붙이지 않는다
+    assert live.fix_name("죄송해요, 이 전화는 홍천군 어르신만 도와드려요.") == "죄송해요, 이 전화는 홍천군 어르신만 도와드려요."
+
+
+def test_greeting_brand_written_as_dwaeyo_is_fixed():
+    assert live.fix_name("안녕하세요. 한 통이면 돼요 AI 상담원입니다. 어떤 일로. 전화 주셨어요?") == \
+        "안녕하세요. '한 통이면 돼유' AI 상담원입니다. 어떤 일로 전화 주셨어요?"
