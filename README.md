@@ -63,15 +63,15 @@ AI는 받아 적고 초안을 만드는 일만 합니다. 주소 · 병원 · �
 
 ```mermaid
 flowchart LR
-  elder(["① 어르신 전화"]):::human --> vapi["② Vapi 통화<br/>Soniox 받아쓰기 → GPT-5.6 Sol<br/>→ Cartesia 목소리"]:::ai
-  vapi <--> tools["③ 통화 중 도구<br/>save_info · check_address<br/>find_date · bus_guide"]:::rule
-  pub[("홍천 공공데이터<br/>리 105 · 의료기관 88<br/>정류장 1,125 · 시간표")]:::data --> tools
+  elder(["① 어르신 전화"]):::human --> vapi["② Vapi 통화<br/>Soniox 받아쓰기<br/>→ GPT-5.6 Sol 대화<br/>→ Cartesia 목소리"]:::ai
+  vapi <--> tools["③ 통화 중 도구<br/>save_info<br/>check_address<br/>find_date<br/>bus_guide"]:::rule
+  pub[("홍천 공공데이터<br/>리 105곳<br/>의료기관 88곳<br/>정류장 1,125곳<br/>버스 시간표")]:::data --> tools
   tools --> live["실시간 화면<br/>/live"]:::rule
   vapi --> report["④ 통화 보고서<br/>대화 · 뽑은 항목"]:::ai
-  report --> draft["⑤ 신청서 초안<br/>확정값 우선 · 규칙 점검"]:::rule
+  report --> draft["⑤ 신청서 초안<br/>확정값 우선<br/>규칙 점검"]:::rule
   draft --> db[("PostgreSQL")]:::data
   db --> officer{{"⑥ 담당 공무원<br/>확인 · 결정"}}:::human
-  officer --> forms["⑦ 기관 요청<br/>공식 서식 자동 작성"]:::rule
+  officer --> forms["⑦ 기관 요청<br/>공식 서식<br/>자동 작성"]:::rule
   forms --> notice["⑧ 확정 안내문"]:::rule
   classDef human fill:#FDF1E4,stroke:#E07B00,color:#7A4312,stroke-width:2px
   classDef ai fill:#E9F1FD,stroke:#2F6FD1,color:#163C7A,stroke-width:2px
