@@ -63,7 +63,7 @@ AI는 받아 적고 초안을 만드는 일만 합니다. 주소 · 병원 · �
 
 ```mermaid
 flowchart LR
-  elder(["① 어르신 전화"]):::human --> vapi["② Vapi 통화<br/>Soniox 받아쓰기<br/>→ GPT-5.6 Sol 대화<br/>→ Cartesia 목소리"]:::ai
+  elder(["① 어르신 전화"]):::human --> vapi["② Vapi 통화<br/>받아쓰기 Soniox<br/>대화 GPT-5.6 Sol<br/>목소리 Cartesia"]:::ai
   vapi <--> tools["③ 통화 중 도구<br/>save_info<br/>check_address<br/>find_date<br/>bus_guide"]:::rule
   pub[("홍천 공공데이터<br/>리 105곳<br/>의료기관 88곳<br/>정류장 1,125곳<br/>버스 시간표")]:::data --> tools
   tools --> live["실시간 화면<br/>/live"]:::rule
